@@ -48,5 +48,5 @@ printf '{"sha":"%s","branch":"%s","deployedAt":"%s"}\n' \
   "$SHA" "$BRANCH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEST/deploy-meta.json"
 
 say "published ${SHA:0:7} → $DEST"
-dc_notify success "$SITE deployed ${SHA:0:7} → sonny-boy.xeed.ink"
+dc_notify success "${SHA:0:7}"
 say "=== deploy done ==="

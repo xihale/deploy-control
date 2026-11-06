@@ -1,4 +1,4 @@
-# gx (<vps-ip>) deployd configuration TEMPLATE.
+# gx VPS deployd configuration TEMPLATE.
 # Real config lives at /var/lib/deployd/config.yaml (0600 root) with real
 # tokens/secrets — never commit those. Relative paths resolve against the
 # config file's directory.
@@ -79,3 +79,10 @@ sites:
     script: /var/lib/deployd/scripts/sonny-boy.sh
     webhook_secret: <secret>
     run_as: sonny-boy-ci
+  # deploy-control itself (self-bootstrap); no run_as: runs as the service
+  # user (root) because it installs the binary and restarts the service.
+  - name: deploy-control
+    repo: https://github.com/xihale/deploy-control
+    branch: main
+    script: /var/lib/deployd/scripts/deploy-control.sh
+    webhook_secret: <secret>

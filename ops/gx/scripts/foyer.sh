@@ -82,5 +82,5 @@ if [ "$up" != 1 ]; then
 fi
 
 say "published ${SHA:0:7} → $BIN (foyer active, :3002 healthy)"
-dc_notify success "$SITE deployed ${SHA:0:7} (home.xeed.ink healthy)"
+dc_notify success "${SHA:0:7}"
 say "=== deploy done ==="

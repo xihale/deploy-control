@@ -37,6 +37,6 @@ sites:
   - name: blog
     repo: https://github.com/example/blog.git
     branch: main
-    script: /home/xihale/scripts/deploy-blog.sh
+    script: /usr/local/libexec/deploy-blog.sh
     webhook_secret: replace-with-a-long-random-secret
     # run_as: ciblog

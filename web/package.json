@@ -1,6 +1,7 @@
 {
   "name": "deploy-control-web",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "packageManager": "pnpm@12.15.0",
   "scripts": {

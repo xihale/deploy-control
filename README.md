@@ -1,8 +1,15 @@
 # deploy-control
 
-Go 部署控制服务：GitHub push 验签、SQLite 持久队列、每站串行/全局限并发、统一 Git 拉取、执行站点部署脚本和查询日志。前端接口见 [FRONTEND.md](FRONTEND.md)，gx 切换前必读 [MIGRATION.md](MIGRATION.md)。
+自托管的多站点部署控制台：Go 后端（webhook 验签、SQLite 持久队列、并发调度）+ Next.js 静态导出前端，由服务同源托管，无跨域、无外部依赖服务。前端接口与页面说明见 [FRONTEND.md](FRONTEND.md)。
 
-## 启动
+- GitHub push 触发（HMAC-SHA256 验签、delivery 去重）与手动/API 触发
+- 每站串行、全站有限并发；任务状态落 SQLite，重启不会假装成功
+- 统一 Git 拉取策略：首次强制直连，HTTPS 重试走配置的代理，SSH 永不代理
+- 脚本输出写入任务日志；`checked_sha` 记录实际检出的提交，与请求的 `sha` 区分
+- 可选 `web_dir`：前端由服务在同源 `/` 托管；留空则纯 API 模式
+- 自举：本仓库自身也通过 deployd 部署（见 `ops/gx/scripts/deploy-control.sh`）
+
+## 快速开始
 
 需要 Go、Git 和可执行的站点脚本。复制 `config.example.yaml` 为 `config.yaml`，修改仓库、分支、脚本绝对路径与密钥。配置含 webhook secret，应仅授权服务用户读取（例如 `chmod 600 config.yaml`），不要提交到版本库。生成足够长的随机 API token，配置其 SHA-256 摘要：
 
@@ -56,14 +63,22 @@ DEV_API_ORIGIN=http://127.0.0.1:8790 pnpm dev   # http://localhost:3000
 
 脚本可以执行工作树中的项目代码，因此应按不可信代码对待。输出写入任务日志；避免输出密钥。非零退出会标记失败，但失败后线上内容是否发生了部分变更，取决于各站实际发布过程。
 
-
 正式部署应使用 systemd 的 `KillMode=control-group`，确保服务被强杀后其构建子进程也被清理，再自动重启服务；只恢复数据库中的任务状态并不能清理遗留进程。同一数据库只能由一个 deployd 实例使用。
+
 配置 `run_as` 时，Git 操作和脚本通过 `sudo -n -H -u <用户>` 执行。必须预先建立受限制的服务身份、工作目录访问权限、目标用户的 Git 凭据和可用的 sudo 授权；不要将本服务作为任意命令的 root 代理。服务会为每站创建独立工作树并使用该用户权限。具体 sudo 规则必须按安装路径和实际调用审查验证后再配置。
 
-## 网络策略与状态
+## 网络策略与状态语义
 
 HTTPS 仓库首次尝试直连，后续最多四次使用配置的代理；SSH 使用直连重试。其他脚本自行发起的网络请求不受此策略约束。任务在服务重启时不会假装成功：此前运行中的任务标记为失败，已排队任务仍可被调度。后台记录的 `checked_sha` 是实际检出版本；发布是否真正成功仍依赖受审查的站点脚本。
 
 Git 支持按 URL 指定代理，其优先级可能高于全局 `http.proxy`。部署前须检查各 CI 用户和工作树的 Git 配置，移除与统一策略冲突的按 URL 代理项；否则无法保证连接经过预期路径。
 
-当前 gx 的九个旧脚本还未迁移，不应直接把它们配置进新服务：它们有自己的锁、fetch、重跑和 SHA 处理，冲突时可能返回 0。迁移需要逐站排空旧部署并改造脚本，详见迁移文档。
+## ops/（生产实例参考）
+
+[`ops/gx/`](ops/gx/) 是一台 Debian VPS 上的真实生产配置快照：Caddyfile、systemd unit、九个站点脚本与共享通知助手 `notify.sh`、配置模板，以及逐站迁移记录（[MIGRATION.md](ops/gx/MIGRATION.md)）。站点脚本展示了几类典型形态：静态产物 attic、Go 二进制 + systemd user service、源码树 rsync、工具链自助 bootstrap（foyer 的 Go、deploy-control 的 Go/corepack）。
+
+自举部署：`ops/gx/scripts/deploy-control.sh` 在检出工作树里构建前后端、rsync 发布静态资源；仅当二进制发生变化时，通过 `systemd-run` 延迟几秒换装并重启 deployd——让当前任务先正常结束、状态落库，服务再带着新二进制回来。也就是说，部署控制台的更新流程本身就是它管理的任务之一。
+
+## License
+
+[MIT](LICENSE)
