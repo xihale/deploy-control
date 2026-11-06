@@ -49,6 +49,7 @@
   color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  --logo-tile: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -85,6 +86,7 @@
   color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
+  --logo-tile: oklch(0.269 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
@@ -168,6 +170,7 @@
   --color-run: var(--run);
   --color-wait: var(--wait);
   --color-gone: var(--gone);
+  --color-logo-tile: var(--logo-tile);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
@@ -192,6 +195,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
+    --logo-tile: oklch(0.269 0 0);
     --ok: oklch(0.75 0.16 155);
     --bad: oklch(0.7 0.19 22);
     --run: oklch(0.72 0.15 255);

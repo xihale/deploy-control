@@ -1,16 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" role="img" aria-label="部署控制台">
   <!-- 与应用头部 Logo 同源几何（28 网格、圆角 8、3px 竖条、间距 3px）。
-       支持内联媒体查询的浏览器（Chrome / Firefox）会随配色方案反相；
-       不支持时退回默认深底白条，浅色与深色标签栏都能辨认。 -->
+       浅色：黑底白条；暗色：深灰面(#262626)配浅条，标签栏与头部都是深色时
+       不再出现刺眼的白色底板。不支持媒体查询的浏览器退回浅色版。 -->
   <style>
     .tile { fill: #0a0a0a; }
     .bar-1 { fill: #ffffff; fill-opacity: 0.6; }
     .bar-2 { fill: #ffffff; fill-opacity: 0.8; }
     .bar-3 { fill: #0fa05c; }
     @media (prefers-color-scheme: dark) {
-      .tile { fill: #fafafa; }
-      .bar-1 { fill: #0a0b0d; fill-opacity: 0.6; }
-      .bar-2 { fill: #0a0b0d; fill-opacity: 0.8; }
+      /* 暗色下改用深面 + 浅条：与 --secondary(#262626)、--foreground(#fafafa)、--ok(#42cb80) 一致 */
+      .tile { fill: #262626; }
+      .bar-1 { fill: #fafafa; fill-opacity: 0.6; }
+      .bar-2 { fill: #fafafa; fill-opacity: 0.8; }
       .bar-3 { fill: #42cb80; }
     }
   </style>

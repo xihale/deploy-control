@@ -33,7 +33,7 @@ cd web && pnpm install && pnpm build   # 输出到 web/out
 
 前端改动后需要重新执行 `pnpm build` 并重启服务；静态文件在启动时挂载，不做热更新。
 
-站内 favicon 是项目自有标记，与头部 Logo 同一几何：`web/public/favicon.svg` 内置 `prefers-color-scheme` 反相（暗色下浅底深条），`favicon.ico` 是 16/32/48 多尺寸兜底（供不读 SVG 的浏览器），`apple-icon.png`（180px，满幅方底，圆角交给 iOS）由同一 SVG 的浅色版渲染。图标文件名固定，`internal/webui` 对它们发 `no-cache`。
+站内 favicon 是项目自有标记，与头部 Logo 同一几何：`web/public/favicon.svg` 内置 `prefers-color-scheme` 适配（暗色下换成深灰面 #262626 配浅条，标签栏/头部同为深色时不再是白色底板），`favicon.ico` 是 16/32/48 多尺寸兜底（供不读 SVG 的浏览器），`apple-icon.png`（180px，满幅方底，圆角交给 iOS）由同一 SVG 的浅色版渲染。图标文件名固定，`internal/webui` 对它们发 `no-cache`。
 
 开发调试时不要走静态导出，用 dev server 转发（同源，无需 CORS）：
 
