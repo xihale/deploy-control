@@ -1,0 +1,22 @@
+[Unit]
+Description=deployd deployment control service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/deployd
+ExecStart=/usr/local/bin/deployd -config /var/lib/deployd/config.yaml
+Restart=on-failure
+RestartSec=3
+# README: a hard kill must take build children with it, then auto-restart;
+# job state is recovered from the database. deployd runs as root because it
+# chowns worktree roots to CI users and drops to them via `sudo -n -H -u`;
+# sandboxing options that break setuid (NoNewPrivileges, ProtectSystem,
+# ProtectHome) must stay off.
+KillMode=control-group
+TimeoutStopSec=30
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

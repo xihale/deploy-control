@@ -122,10 +122,24 @@ func runAsOrSelf(runAs string) string {
 	return runAs
 }
 
-// Clone clones remoteURL into dir (parent must exist) under the unified
-// policy, running git as runAs.
+// Clone clones remoteURL into dir under the unified policy, running git as
+// runAs. Attempts run in a sibling temp dir that is renamed into place only on success: a timed-out
+// or interrupted clone must not leave a partial directory behind, which
+// would poison every remaining attempt with "already exists and is not an
+// empty directory".
 func (f *Fetcher) Clone(ctx context.Context, remoteURL, dir, runAs string) (*Result, error) {
-	return f.run(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, dir})
+	tmp := dir + ".clone-tmp"
+	_ = os.RemoveAll(tmp)
+	res, err := f.run(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, tmp})
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		return res, err
+	}
+	if err := os.Rename(tmp, dir); err != nil {
+		_ = os.RemoveAll(tmp)
+		return res, fmt.Errorf("rename clone into place: %w", err)
+	}
+	return res, nil
 }
 
 // Fetch runs git fetch --prune origin in the repo at dir under the policy,
