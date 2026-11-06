@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   description: '多站点部署状态、任务队列与日志的个人控制台。',
   icons: {
     icon: '/icon.svg',
+    apple: '/apple-icon.png',
   },
 }
 

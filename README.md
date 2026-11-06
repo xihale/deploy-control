@@ -33,6 +33,8 @@ cd web && pnpm install && pnpm build   # 输出到 web/out
 
 前端改动后需要重新执行 `pnpm build` 并重启服务；静态文件在启动时挂载，不做热更新。
 
+站内图标（`web/public/icon.svg`、`apple-icon.png`）来自 Twemoji U+1F680，许可 CC-BY 4.0（<https://github.com/jdecked/twemoji>），改动时保留署名。
+
 开发调试时不要走静态导出，用 dev server 转发（同源，无需 CORS）：
 
 ```sh

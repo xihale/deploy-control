@@ -111,6 +111,9 @@ func cacheControl(upath, name string) string {
 	switch {
 	case strings.HasPrefix(upath, "/_next/static/"):
 		return "public, max-age=31536000, immutable"
+	// 图标文件名固定、内容会被替换，缓存一小时会让旧图标继续显示。
+	case upath == "/icon.svg" || upath == "/favicon.ico" || upath == "/apple-icon.png":
+		return "no-cache"
 	case strings.HasSuffix(name, ".html"):
 		return "no-cache"
 	default:

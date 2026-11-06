@@ -18,6 +18,8 @@ func newTestHandler(t *testing.T) *Handler {
 		"404.html":              "<html>missing</html>",
 		"_next/static/app.js":   "console.log(1)",
 		"icon.svg":              "<svg/>",
+		"apple-icon.png":        "png",
+		"favicon.ico":           "ico",
 		"empty-dir/placeholder": "",
 	}
 	for name, body := range files {
@@ -98,5 +100,18 @@ func TestRejectsNonReadMethods(t *testing.T) {
 func TestNewRequiresIndex(t *testing.T) {
 	if _, err := New(t.TempDir()); err == nil {
 		t.Fatal("New must reject a directory without index.html")
+	}
+}
+
+func TestIconsAreRevalidated(t *testing.T) {
+	h := newTestHandler(t)
+	for _, target := range []string{"/icon.svg", "/apple-icon.png", "/favicon.ico"} {
+		rec := serve(h, http.MethodGet, target)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status %d", target, rec.Code)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+			t.Fatalf("%s: cache-control %q, want no-cache", target, got)
+		}
 	}
 }
