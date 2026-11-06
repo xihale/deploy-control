@@ -220,3 +220,54 @@ func TestRunGitKillsProcessGroupOnTimeout(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// Clone must reset its staging dir between attempts: a timed-out first
+// attempt leaves partial contents that would otherwise make every later
+// attempt fail instantly with "destination already exists".
+func TestCloneResetsStagingBetweenAttempts(t *testing.T) {
+	origRun, origSleep := runGitFn, sleepFn
+	defer func() { runGitFn, sleepFn = origRun, origSleep }()
+	sleepFn = func(time.Duration) {}
+
+	dir := filepath.Join(t.TempDir(), "work", "site")
+	calls := 0
+	runGitFn = func(_ context.Context, _ string, _ string, argv, _ []string) (string, error) {
+		calls++
+		target := argv[len(argv)-1]
+		switch calls {
+		case 1:
+			// Simulate a timed-out clone: partial contents, then die.
+			if err := os.MkdirAll(filepath.Join(target, ".git"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			return "Cloning into...", fmt.Errorf("exit status 143")
+		default:
+			// Later attempts must see a CLEAN staging dir...
+			if entries, err := os.ReadDir(target); err != nil || len(entries) != 0 {
+				t.Fatalf("attempt %d: staging not reset: %v", calls, entries)
+			}
+			// ...and succeed like a real clone would.
+			if err := os.MkdirAll(filepath.Join(target, ".git"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(target, "f.txt"), []byte("ok"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return "", nil
+		}
+	}
+	f := &Fetcher{}
+	res, err := f.Clone(context.Background(), "https://example.invalid/x", dir, "")
+	if err != nil {
+		t.Fatalf("clone: %v (attempts %v)", err, res.Attempts)
+	}
+	if calls != 2 {
+		t.Fatalf("attempts = %d, want 2", calls)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "f.txt")); string(b) != "ok" {
+		t.Fatalf("clone not merged into place: %v", b)
+	}
+	if _, err := os.Stat(dir + ".clone-staging"); !os.IsNotExist(err) {
+		t.Fatal("staging dir left behind after success")
+	}
+}

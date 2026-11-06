@@ -88,9 +88,21 @@ func (f *Fetcher) attemptArgs(remoteURL string, attempt int, base []string) (arg
 // per-attempt descriptions. err is non-nil when no attempt exited 0.
 // Every attempt is logged via f.logf regardless of outcome.
 func (f *Fetcher) run(ctx context.Context, dir, runAs, remoteURL string, base []string) (*Result, error) {
+	return f.runOpts(ctx, dir, runAs, remoteURL, base, nil)
+}
+
+// runOpts is run with an optional hook invoked before each attempt (attempt
+// is 0-based; it is NOT called before attempt 0). Clone uses it to reset its
+// staging dir between attempts: a timed-out attempt leaves a partial clone
+// that would make every later attempt fail instantly with "destination
+// already exists".
+func (f *Fetcher) runOpts(ctx context.Context, dir, runAs, remoteURL string, base []string, preAttempt func(attempt int)) (*Result, error) {
 	res := &Result{}
 	var lastErr string
 	for attempt := range Attempts {
+		if attempt > 0 && preAttempt != nil {
+			preAttempt(attempt)
+		}
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
@@ -134,20 +146,31 @@ func runAsOrSelf(runAs string) string {
 // writable by runAs — the service creates staging and passes it to runAs.
 func (f *Fetcher) Clone(ctx context.Context, remoteURL, dir, runAs string) (*Result, error) {
 	tmp := dir + ".clone-staging"
-	_ = os.RemoveAll(tmp)
-	if err := os.MkdirAll(tmp, 0o755); err != nil {
-		return nil, fmt.Errorf("create clone staging: %w", err)
-	}
-	if runAs != "" {
-		if u, err := user.Lookup(runAs); err == nil {
-			if uid, e1 := strconv.Atoi(u.Uid); e1 == nil {
-				if gid, e2 := strconv.Atoi(u.Gid); e2 == nil {
-					_ = os.Chown(tmp, uid, gid)
+	mkStaging := func() error {
+		_ = os.RemoveAll(tmp)
+		if err := os.MkdirAll(tmp, 0o755); err != nil {
+			return err
+		}
+		if runAs != "" {
+			if u, err := user.Lookup(runAs); err == nil {
+				if uid, e1 := strconv.Atoi(u.Uid); e1 == nil {
+					if gid, e2 := strconv.Atoi(u.Gid); e2 == nil {
+						_ = os.Chown(tmp, uid, gid)
+					}
 				}
 			}
 		}
+		return nil
 	}
-	res, err := f.run(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, tmp})
+	if err := mkStaging(); err != nil {
+		return nil, fmt.Errorf("create clone staging: %w", err)
+	}
+	res, err := f.runOpts(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, tmp},
+		func(attempt int) {
+			// Reset staging after a failed attempt: a timed-out clone
+			// leaves partial contents that block the next attempt.
+			_ = mkStaging()
+		})
 	if err != nil {
 		_ = os.RemoveAll(tmp)
 		return res, err
