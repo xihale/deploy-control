@@ -22,8 +22,7 @@ function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
     <Link
       href={`/site?name=${encodeURIComponent(site.name)}`}
       className={cn(
-        'group relative flex flex-col gap-5 rounded-2xl border bg-card p-5 transition-all',
-        'hover:-translate-y-0.5 hover:shadow-lg hover:shadow-foreground/5',
+        'group surface relative flex flex-col gap-5 rounded-2xl border bg-card p-5',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         latest?.status === 'failed' && 'border-bad/40',
       )}
@@ -56,7 +55,7 @@ function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
             </span>
           )}
         </span>
-        <span className="truncate font-mono text-muted-foreground">
+        <span className="truncate font-mono text-muted-foreground transition-colors duration-200 group-hover:text-foreground/80">
           {sha ?? repoLabel(site.repo)}
         </span>
       </div>

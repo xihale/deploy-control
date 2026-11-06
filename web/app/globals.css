@@ -213,3 +213,28 @@
 @media (prefers-reduced-motion: reduce) {
   .status-pulse { animation: none; }
 }
+
+/* 可交互卡片的统一悬停：只动底色与一圈 1px 内描边，不做位移和大投影。
+   描边走 box-shadow 而非 border-color，这样「失败」等语义边框不会被覆盖。 */
+.surface {
+  transition:
+    background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (hover: hover) {
+  .surface:hover {
+    background-color: color-mix(in oklab, var(--card) 95%, var(--foreground) 5%);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent);
+  }
+}
+
+/* 按下时立刻响应，只保留一档更深的底色，不做缩放。 */
+.surface:active {
+  transition-duration: 70ms;
+  background-color: color-mix(in oklab, var(--card) 90%, var(--foreground) 10%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface { transition: none; }
+}

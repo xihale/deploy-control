@@ -45,7 +45,7 @@ function AccessPanel({ site }: { site: Site }) {
 
   return (
     <details className="group rounded-2xl border bg-card px-5 py-4">
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+      <summary className="-mx-2 -my-1 flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted/50 hover:text-foreground [&::-webkit-details-marker]:hidden">
         <WebhookIcon className="size-4" />
         接入信息
         <span
@@ -97,9 +97,6 @@ function AccessPanel({ site }: { site: Site }) {
           <dd className="font-mono text-xs">{site.run_as ?? '服务用户'}</dd>
         </div>
       </dl>
-      <p className="mt-3 text-xs text-muted-foreground">
-        在 GitHub 仓库的 Webhook 中填写该地址，事件选择 push，并配置与此站点一致的密钥。
-      </p>
     </details>
   )
 }
@@ -192,7 +189,7 @@ export function SiteView() {
                   'flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm transition-colors',
                   active
                     ? 'bg-foreground text-background'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
                 )}
               >
                 {s && <StatusDot status={s} className="size-2" />}

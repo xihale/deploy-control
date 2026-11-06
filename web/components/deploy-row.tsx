@@ -22,7 +22,7 @@ export function DeployRow({
   return (
     <Link
       href={`/deploy?id=${job.id}`}
-      className="group flex items-center gap-4 rounded-xl border bg-card px-4 py-3.5 transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring"
+      className="group surface flex items-center gap-4 rounded-xl border bg-card px-4 py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <StatusBadge status={job.status} className="w-[5.5rem] shrink-0 justify-center" />
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -51,7 +51,7 @@ export function DeployRow({
       <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
         {timeAgo(job.created_at)}
       </span>
-      <ChevronRightIcon className="size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
+      <ChevronRightIcon className="size-4 text-muted-foreground/50 transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5" />
     </Link>
   )
 }
