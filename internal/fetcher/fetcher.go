@@ -24,6 +24,15 @@ const DefaultProxy = "http://127.0.0.1:7654"
 // Attempts is the fixed attempt count: 1 direct + 4 proxied-or-direct.
 const Attempts = 5
 
+const (
+	// AttemptTimeout bounds one fetch attempt. Fetches transfer deltas.
+	AttemptTimeout = 60 * time.Second
+	// CloneTimeout bounds one clone attempt. The first clone transfers the
+	// whole packed repository (and checks out the full tree), and gx→GitHub
+	// throughput measured ~27 KB/s; a 12 MB site repo needs ~8 minutes.
+	CloneTimeout = 10 * time.Minute
+)
+
 // Result summarizes every attempt of a fetch/clone.
 type Result struct {
 	OK       bool
@@ -88,7 +97,7 @@ func (f *Fetcher) attemptArgs(remoteURL string, attempt int, base []string) (arg
 // per-attempt descriptions. err is non-nil when no attempt exited 0.
 // Every attempt is logged via f.logf regardless of outcome.
 func (f *Fetcher) run(ctx context.Context, dir, runAs, remoteURL string, base []string) (*Result, error) {
-	return f.runOpts(ctx, dir, runAs, remoteURL, base, nil)
+	return f.runOpts(ctx, dir, runAs, remoteURL, base, AttemptTimeout, nil)
 }
 
 // runOpts is run with an optional hook invoked before each attempt (attempt
@@ -96,7 +105,7 @@ func (f *Fetcher) run(ctx context.Context, dir, runAs, remoteURL string, base []
 // staging dir between attempts: a timed-out attempt leaves a partial clone
 // that would make every later attempt fail instantly with "destination
 // already exists".
-func (f *Fetcher) runOpts(ctx context.Context, dir, runAs, remoteURL string, base []string, preAttempt func(attempt int)) (*Result, error) {
+func (f *Fetcher) runOpts(ctx context.Context, dir, runAs, remoteURL string, base []string, timeout time.Duration, preAttempt func(attempt int)) (*Result, error) {
 	res := &Result{}
 	var lastErr string
 	for attempt := range Attempts {
@@ -108,7 +117,7 @@ func (f *Fetcher) runOpts(ctx context.Context, dir, runAs, remoteURL string, bas
 		}
 		args, env, desc := f.attemptArgs(remoteURL, attempt, base)
 		start := time.Now()
-		attemptCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 		output, err := runGitFn(attemptCtx, dir, runAs, args, env)
 		cancel()
 		dur := time.Since(start).Round(time.Millisecond)
@@ -165,7 +174,7 @@ func (f *Fetcher) Clone(ctx context.Context, remoteURL, dir, runAs string) (*Res
 	if err := mkStaging(); err != nil {
 		return nil, fmt.Errorf("create clone staging: %w", err)
 	}
-	res, err := f.runOpts(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, tmp},
+	res, err := f.runOpts(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, tmp}, CloneTimeout,
 		func(attempt int) {
 			// Reset staging after a failed attempt: a timed-out clone
 			// leaves partial contents that block the next attempt.
