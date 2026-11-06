@@ -1,0 +1,9 @@
+config.yaml
+deployd
+deploy.db*
+state/
+web/node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+web/*.tsbuildinfo

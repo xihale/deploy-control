@@ -1,0 +1,42 @@
+# deployd example configuration.
+# Relative db_path / state_dir / log_dir resolve against this file's directory.
+
+listen: 127.0.0.1:8080          # bind address; plain user must use a port > 1024
+db_path: deploy.db
+state_dir: state
+log_dir: state/logs
+# 静态前端导出目录（`cd web && pnpm build` 的产物）。相对路径以本文件所在目录为准。
+# 留空则只提供 API，不挂载前端。
+web_dir: web/out
+
+global_concurrency: 2            # max simultaneously running deploys across all sites (1-32)
+deploy_timeout_sec: 1800         # hard per-deploy timeout; script killed, job failed
+
+fetch:
+  # Unified fetch policy, enforced by the service:
+  #   attempt 1: forced direct (proxy env vars scrubbed in both cases AND
+  #              `-c http.proxy= -c https.proxy=` overrides repo/global git config)
+  #   attempts 2-5: HTTPS remotes via this proxy; SSH remotes stay direct
+  #               (SSH is never proxied and is never reported as proxied)
+  # Set to "none" to disable proxy attempts entirely.
+  proxy: http://127.0.0.1:7654
+
+# API users. token_hash is `printf '%s' "$TOKEN" | sha256sum | cut -d' ' -f1`.
+users:
+  - name: alice
+    token_hash: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    role: admin                  # admin: manual deploys; viewer: read-only
+  - name: bot
+    token_hash: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+    role: viewer
+
+# Sites. script must be an absolute, executable path (allowlist).
+# webhook_secret is the GitHub webhook secret for this site (HMAC-SHA256).
+# run_as (optional) drops to that unix user via `sudo -n -H -u` for CI isolation.
+sites:
+  - name: blog
+    repo: https://github.com/example/blog.git
+    branch: main
+    script: /home/xihale/scripts/deploy-blog.sh
+    webhook_secret: replace-with-a-long-random-secret
+    # run_as: ciblog
