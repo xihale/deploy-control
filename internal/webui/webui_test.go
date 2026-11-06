@@ -17,7 +17,7 @@ func newTestHandler(t *testing.T) *Handler {
 		"site/index.html":       "<html>site</html>",
 		"404.html":              "<html>missing</html>",
 		"_next/static/app.js":   "console.log(1)",
-		"icon.svg":              "<svg/>",
+		"favicon.svg":           "<svg/>",
 		"apple-icon.png":        "png",
 		"favicon.ico":           "ico",
 		"empty-dir/placeholder": "",
@@ -105,7 +105,7 @@ func TestNewRequiresIndex(t *testing.T) {
 
 func TestIconsAreRevalidated(t *testing.T) {
 	h := newTestHandler(t)
-	for _, target := range []string{"/icon.svg", "/apple-icon.png", "/favicon.ico"} {
+	for _, target := range []string{"/favicon.svg", "/apple-icon.png", "/favicon.ico"} {
 		rec := serve(h, http.MethodGet, target)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: status %d", target, rec.Code)
