@@ -1,2 +1,15 @@
-<!-- Twemoji rocket U+1F680, CC-BY 4.0, https://github.com/jdecked/twemoji -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 38 38"><path fill="#A0041E" d="M1 17l8-7 16 1 1 16-7 8s.001-5.999-6-12-12-6-12-6z"/><path fill="#FFAC33" d="M.973 35s-.036-7.979 2.985-11S15 21.187 15 21.187 14.999 29 11.999 32c-3 3-11.026 3-11.026 3z"/><circle fill="#FFCC4D" cx="8.999" cy="27" r="4"/><path fill="#55ACEE" d="M35.999 0s-10 0-22 10c-6 5-6 14-4 16s11 2 16-4c10-12 10-22 10-22z"/><path d="M26.999 5c-1.623 0-3.013.971-3.641 2.36.502-.227 1.055-.36 1.641-.36 2.209 0 4 1.791 4 4 0 .586-.133 1.139-.359 1.64 1.389-.627 2.359-2.017 2.359-3.64 0-2.209-1.791-4-4-4z"/><path fill="#A0041E" d="M8 28s0-4 1-5 13.001-10.999 14-10-9.001 13-10.001 14S8 28 8 28z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" role="img" aria-label="部署控制台">
+  <!-- 与应用头部 Logo 同一几何（28 网格、3px 竖条、圆角 8）。
+       按 prefers-color-scheme 反相：暗色下浅底深条，深色标签栏里也能分辨。 -->
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #fafafa; }
+      .bar-1 { fill: #0a0b0d; fill-opacity: 0.6; }
+      .bar-2 { fill: #0a0b0d; fill-opacity: 0.8; }
+    }
+  </style>
+  <rect class="tile" width="28" height="28" rx="8" fill="#0a0a0a" />
+  <rect class="bar-1" x="6.5" y="15.4" width="3" height="5.6" rx="1.5" fill="#ffffff" fill-opacity="0.6" />
+  <rect class="bar-2" x="12.5" y="12.6" width="3" height="8.4" rx="1.5" fill="#ffffff" fill-opacity="0.8" />
+  <rect class="bar-3" x="18.5" y="7" width="3" height="14" rx="1.5" fill="#0fa05c" />
+</svg>
