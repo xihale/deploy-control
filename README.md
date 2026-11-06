@@ -75,7 +75,7 @@ Git 支持按 URL 指定代理，其优先级可能高于全局 `http.proxy`。�
 
 ## ops/（生产实例参考）
 
-[`ops/gx/`](ops/gx/) 是一台 Debian VPS 上的真实生产配置快照：Caddyfile、systemd unit、九个站点脚本与共享通知助手 `notify.sh`、配置模板，以及逐站迁移记录（[MIGRATION.md](ops/gx/MIGRATION.md)）。站点脚本展示了几类典型形态：静态产物 attic、Go 二进制 + systemd user service、源码树 rsync、工具链自助 bootstrap（foyer 的 Go、deploy-control 的 Go/corepack）。
+[`ops/gx/`](ops/gx/) 是一台 Debian VPS 上的真实生产配置快照：Caddyfile、systemd unit、九个站点脚本与共享通知助手 `notify.sh`（成功通知标题为 `[site] [commit]`，失败为 `🚨 [site]` + 原因）、配置模板，以及逐站迁移记录（[MIGRATION.md](ops/gx/MIGRATION.md)）。站点脚本展示了几类典型形态：静态产物 attic、Go 二进制 + systemd user service、源码树 rsync、工具链自助 bootstrap（foyer 的 Go、deploy-control 的 Go/corepack）。
 
 自举部署：`ops/gx/scripts/deploy-control.sh` 在检出工作树里构建前后端、rsync 发布静态资源；仅当二进制发生变化时，通过 `systemd-run` 延迟几秒换装并重启 deployd——让当前任务先正常结束、状态落库，服务再带着新二进制回来。也就是说，部署控制台的更新流程本身就是它管理的任务之一。
 
