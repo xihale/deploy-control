@@ -1,5 +1,5 @@
 config.yaml
-deployd
+/deployd
 deploy.db*
 state/
 web/node_modules/

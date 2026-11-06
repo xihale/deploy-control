@@ -11,6 +11,7 @@
 # use the China mirrors and goproxy.cn (same pattern as foyer.sh).
 set -Eeuo pipefail
 umask 022
+export HOME="${HOME:-/root}" # deployd scrubs env; corepack and $HOME/.ntfy-notify need it
 
 SITE=deploy-control
 SHA="${DEPLOY_COMMIT:?DEPLOY_COMMIT missing}"

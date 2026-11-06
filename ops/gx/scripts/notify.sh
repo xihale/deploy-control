@@ -7,10 +7,12 @@
 #   dc_notify failure "reason"                → title "🚨 [site]", body reason
 dc_notify() {
 	local status="$1"; shift
-	[ -f "$HOME/.ntfy-notify" ] || return 0
+	# deployd clears the environment; run_as-less (root) scripts have no HOME.
+	local home="${HOME:-/root}"
+	[ -f "$home/.ntfy-notify" ] || return 0
 	local topic auth pri title body
-	topic=$(head -n1 "$HOME/.ntfy-notify" 2>/dev/null) || return 0
-	auth=$(sed -n '2p' "$HOME/.ntfy-notify" 2>/dev/null)
+	topic=$(head -n1 "$home/.ntfy-notify" 2>/dev/null) || return 0
+	auth=$(sed -n '2p' "$home/.ntfy-notify" 2>/dev/null)
 	[ -n "$topic" ] || return 0
 	if [ "$status" = success ]; then
 		pri=default; title="$SITE $*"; body=""
