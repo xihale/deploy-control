@@ -11,6 +11,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -123,23 +126,60 @@ func runAsOrSelf(runAs string) string {
 }
 
 // Clone clones remoteURL into dir under the unified policy, running git as
-// runAs. Attempts run in a sibling temp dir that is renamed into place only on success: a timed-out
-// or interrupted clone must not leave a partial directory behind, which
-// would poison every remaining attempt with "already exists and is not an
-// empty directory".
+// runAs. Work happens in a sibling staging dir that is merged into place only
+// on success: a timed-out or interrupted clone must not leave a partial
+// directory behind, which would poison every remaining attempt with "already
+// exists and is not an empty directory". The runner usually pre-creates dir
+// itself and hands ownership to runAs, so the parent is typically NOT
+// writable by runAs — the service creates staging and passes it to runAs.
 func (f *Fetcher) Clone(ctx context.Context, remoteURL, dir, runAs string) (*Result, error) {
-	tmp := dir + ".clone-tmp"
+	tmp := dir + ".clone-staging"
 	_ = os.RemoveAll(tmp)
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
+		return nil, fmt.Errorf("create clone staging: %w", err)
+	}
+	if runAs != "" {
+		if u, err := user.Lookup(runAs); err == nil {
+			if uid, e1 := strconv.Atoi(u.Uid); e1 == nil {
+				if gid, e2 := strconv.Atoi(u.Gid); e2 == nil {
+					_ = os.Chown(tmp, uid, gid)
+				}
+			}
+		}
+	}
 	res, err := f.run(ctx, "", runAs, remoteURL, []string{"clone", remoteURL, tmp})
 	if err != nil {
 		_ = os.RemoveAll(tmp)
 		return res, err
 	}
-	if err := os.Rename(tmp, dir); err != nil {
+	if err := moveTree(tmp, dir); err != nil {
 		_ = os.RemoveAll(tmp)
-		return res, fmt.Errorf("rename clone into place: %w", err)
+		return res, fmt.Errorf("move clone into place: %w", err)
 	}
 	return res, nil
+}
+
+// moveTree renames tmp onto dir when dir does not exist yet; otherwise it
+// merges entries one by one, clearing same-named leftovers first (partial
+// junk from a previously interrupted clone — the runner refuses pre-existing
+// non-repo directories itself, so anything here is ours to replace).
+func moveTree(tmp, dir string) error {
+	if err := os.Rename(tmp, dir); err == nil {
+		return nil
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		src := filepath.Join(tmp, e.Name())
+		dst := filepath.Join(dir, e.Name())
+		_ = os.RemoveAll(dst)
+		if err := os.Rename(src, dst); err != nil {
+			return err
+		}
+	}
+	return os.Remove(tmp)
 }
 
 // Fetch runs git fetch --prune origin in the repo at dir under the policy,
