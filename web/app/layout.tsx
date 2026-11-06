@@ -11,7 +11,11 @@ export const metadata: Metadata = {
   title: '部署控制台',
   description: '多站点部署状态、任务队列与日志的个人控制台。',
   icons: {
-    icon: '/icon.svg',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },
+    ],
+    shortcut: '/favicon.ico',
     apple: '/apple-icon.png',
   },
 }

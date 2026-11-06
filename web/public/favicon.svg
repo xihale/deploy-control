@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" role="img" aria-label="部署控制台">
+  <!-- 与应用头部 Logo 同源几何（28 网格、圆角 8、3px 竖条、间距 3px）。
+       支持内联媒体查询的浏览器（Chrome / Firefox）会随配色方案反相；
+       不支持时退回默认深底白条，浅色与深色标签栏都能辨认。 -->
+  <style>
+    .tile { fill: #0a0a0a; }
+    .bar-1 { fill: #ffffff; fill-opacity: 0.6; }
+    .bar-2 { fill: #ffffff; fill-opacity: 0.8; }
+    .bar-3 { fill: #0fa05c; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #fafafa; }
+      .bar-1 { fill: #0a0b0d; fill-opacity: 0.6; }
+      .bar-2 { fill: #0a0b0d; fill-opacity: 0.8; }
+      .bar-3 { fill: #42cb80; }
+    }
+  </style>
+  <rect class="tile" width="28" height="28" rx="8" />
+  <rect class="bar-1" x="6.5" y="15.4" width="3" height="5.6" rx="1.5" />
+  <rect class="bar-2" x="12.5" y="12.6" width="3" height="8.4" rx="1.5" />
+  <rect class="bar-3" x="18.5" y="7" width="3" height="14" rx="1.5" />
+</svg>
