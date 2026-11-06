@@ -33,6 +33,15 @@ cd web && pnpm install && pnpm build   # 输出到 web/out
 
 前端改动后需要重新执行 `pnpm build` 并重启服务；静态文件在启动时挂载，不做热更新。
 
+开发调试时不要走静态导出，用 dev server 转发（同源，无需 CORS）：
+
+```sh
+cd web
+DEV_API_ORIGIN=http://127.0.0.1:8790 pnpm dev   # http://localhost:3000
+```
+
+设置 `DEV_API_ORIGIN` 后，dev server 把 `/api/*` 和 `/healthz` 转发到该地址，页面照常热更新；token 直接填后端配置里的。不设置该变量时保持静态导出模式，`pnpm build` 产物不受影响。
+
 ## 站点脚本契约
 
 服务负责获取仓库和检出提交。每个站点的 `script` 必须由管理员审核，只负责检查、构建和发布，退出 0 表示发布步骤成功；不应自行 fetch、checkout、重新入队或抢旧锁。服务会以该站工作树作为当前目录，并传入：

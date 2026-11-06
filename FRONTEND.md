@@ -29,6 +29,8 @@
 
 前端登录时用 token 调用 `GET /api/sites` 验证，通过后保存在 sessionStorage（勾选“在此设备上保持登录”时用 localStorage）。登录页的“查看演示数据”使用内置假数据（token 固定为 `demo`），只用于查看视觉效果，不访问后端。
 
+调试前端时用 dev server 的同源转发：`cd web && DEV_API_ORIGIN=http://127.0.0.1:8790 pnpm dev`，访问 http://localhost:3000，`/api/*` 与 `/healthz` 会转发到后端，无需 CORS。该变量只影响 dev，`pnpm build` 仍是静态导出。
+
 ## 当前用户
 
 `GET /api/me`
