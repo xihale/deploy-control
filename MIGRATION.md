@@ -20,6 +20,25 @@
 | light-cathedral | lc-ci | main | 源码树 rsync |
 | sonny-boy | sonny-boy-ci | main | SSH remote、Git LFS、源码树 rsync |
 
+## 迁移状态（2026-11-06）
+
+九站已全部切到新链路（deployd + `/var/lib/deployd/scripts/*.sh`，各站 CI 用户与 per-site webhook secret）。GitHub 每个仓库的 webhook 指向 `https://deploy.xeed.ink/webhook/github/<site>`，旧链路口径（`*/hooks/*`）已不再被引用。
+
+验证证据（均为真实执行结果，非推断）：
+
+- 签名 ping 全部 200；每个仓库真实推送一个**空提交**（内容不变）触发 push 部署，job 17–26 全部 `succeeded`，`checked_sha` 等于推送的提交，九站首页 200。
+- 分站手动部署（`POST /api/deploys`）同样全部成功，日志含 clone/fetch 每次 attempt、脚本输出与退出码。
+- 传输实测：gx→GitHub 吞吐约 27 KB/s，`TLS 握手`经常被黑洞（直连 attempt 60 s 超时），代理 attempt 通常 <1 s 成功；因此 clone 的 attempt 超时独立为 10 分钟（fetch 保持 60 s），clone 失败不留下半成品目录，且每次 attempt 前重置 staging。
+- poetry（58 MB）未走首次 clone：从旧链 clone 播种工作树后只验证了 fetch 增量路径；其余八站的 clone 路径均为真实执行。
+- sonny-boy 仍走 SSH（私有库、Git LFS），代理不覆盖 SSH；`git lfs pull` 在脚本内重试，pointer 检查拦住未 smudge 的指针文件。
+
+未验证 / 风险（不得省略）：
+
+- 切链当日 13:58 Caddy 一次 reload 失败导致重启，窗口内两条 GitHub 投递拿到 502；GitHub 不会自动重投，本次用 API 手动 redeliver 恢复。这类丢投递不会造成错误发布，但会漏一次自动部署，需要面板手动重新部署兜底。
+- poetry 的 clone 路径（新工作树）未经实测，仅播种后的 fetch/checkout/script 路径实测。
+- SSH 偶发不可达时 sonny-boy 会以 10 分钟/attempt × 次数的方式慢失败，受 `deploy_timeout_sec` 兜底。
+- 本轮为验证 webhook 向九仓库各推入一个空提交（`chore: 触发部署验证`）；sonny-boy 首次推送因浅克隆空索引生成了空树提交，已 force-push 恢复到 `f6423837` 并复部署，站点内容 5.7 MB 恢复，无内容损失。
+
 ## 切换要求
 
 1. 先备份并验证旧接收器、sudo 白名单、Caddy、站点配置和部署脚本的恢复路径。新服务的密钥单独存储，不能进入仓库或日志。
