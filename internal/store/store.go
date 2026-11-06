@@ -346,7 +346,8 @@ func (s *Store) ListJobs(site, status string, limit, offset int) ([]Job, int, er
 		return nil, 0, err
 	}
 	defer rows.Close()
-	var jobs []Job
+	// 空 结果集必须序列化为 [] 而不是 null，前端契约依赖这一点。
+	jobs := make([]Job, 0, limit)
 	for rows.Next() {
 		var j Job
 		var createdAt, startedAt, finishedAt sql.NullString
