@@ -75,9 +75,9 @@ Git 支持按 URL 指定代理，其优先级可能高于全局 `http.proxy`。�
 
 ## ops/（生产实例参考）
 
-[`ops/gx/`](ops/gx/) 是一台 Debian VPS 上的真实生产配置快照：Caddyfile、systemd unit、九个站点脚本与共享通知助手 `notify.sh`（成功通知标题为 `[site] [commit]`，失败为 `🚨 [site]` + 原因）、配置模板，以及逐站迁移记录（[MIGRATION.md](ops/gx/MIGRATION.md)）。站点脚本展示了几类典型形态：静态产物 attic、Go 二进制 + systemd user service、源码树 rsync、工具链自助 bootstrap（foyer 的 Go、deploy-control 的 Go/corepack）。
+[`ops/gx/`](ops/gx/) 是一台 Debian VPS 上的真实生产配置快照：Caddyfile、systemd unit、配置模板，以及逐站迁移记录（[MIGRATION.md](ops/gx/MIGRATION.md)）。部署侧是统一的配方体系：所有站点共用一个入口 `scripts/run-site`（类似 makepkg），每个站点一份 `scripts/sites.d/<site>` 配方（类似 PKGBUILD：变量 + 可选的 `prepare`/`build`/`publish` 覆盖；静态产物 attic、Go 二进制 + systemd user service、源码树 rsync、工具链自助 bootstrap 都是配方里的不同形态），预制函数（ntfy 通知 `[site] [commit]` / `🚨 [site]`、attic 发布、deploy-meta、Go 工具链、代理 fetch、LFS 保障）集中在 `scripts/lib/common.sh`，格式说明见 [scripts/sites.d/README.md](ops/gx/scripts/sites.d/README.md)。
 
-自举部署：`ops/gx/scripts/deploy-control.sh` 在检出工作树里构建前后端、rsync 发布静态资源；仅当二进制发生变化时，通过 `systemd-run` 延迟几秒换装并重启 deployd——让当前任务先正常结束、状态落库，服务再带着新二进制回来。也就是说，部署控制台的更新流程本身就是它管理的任务之一。
+自举部署：`scripts/sites.d/deploy-control` 在检出工作树里构建前后端、rsync 发布静态资源；仅当二进制发生变化时，通过 `systemd-run` 延迟几秒换装并重启 deployd——让当前任务先正常结束、状态落库，服务再带着新二进制回来。也就是说，部署控制台的更新流程本身就是它管理的任务之一。
 
 ## License
 

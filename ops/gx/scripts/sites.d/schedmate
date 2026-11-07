@@ -1,0 +1,11 @@
+# schedmate — sched.xeed.ink. Runs as sched-ci, cwd = checked-out worktree
+# (DEPLOY_COMMIT). vite build; hashed /assets/ retire into the attic for
+# ~7 days (must outlive the 5d shell TTL set in Caddy).
+site=schedmate
+dest=/srv/sched
+out=dist
+attic_trees=(assets)
+attic_dir=$HOME/sched-attic
+
+prepare() { bun install; }
+build() { bun run build; }

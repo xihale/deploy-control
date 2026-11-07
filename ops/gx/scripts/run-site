@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# run-site — deployd universal entry (the "makepkg"): every site's script:
+# points here. Per-site behaviour lives in sites.d/<DEPLOY_SITE> (the
+# "PKGBUILD"): a few variables plus optional prepare()/build()/publish()
+# overrides. See sites.d/README.md for the recipe format and the helper
+# library in lib/common.sh.
+#
+# deployd contract: cwd = checked-out worktree at exactly DEPLOY_COMMIT;
+# neutral environment with DEPLOY_SITE/DEPLOY_BRANCH/DEPLOY_COMMIT/
+# DEPLOY_JOB_ID/DEPLOY_FETCH_PROXY exported; possibly a different run_as
+# user (sudo -H supplies HOME).
+set -Eeuo pipefail
+umask 022
+export HOME="${HOME:-/root}" # run_as-less (root) scripts get a scrubbed env
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+BRANCH="${DEPLOY_BRANCH:?DEPLOY_BRANCH missing}"
+SHA="${DEPLOY_COMMIT:?DEPLOY_COMMIT missing}"
+SITE="${DEPLOY_SITE:?DEPLOY_SITE missing}"
+
+. "$SCRIPT_DIR/lib/common.sh"
+
+RECIPE="$SCRIPT_DIR/sites.d/$SITE"
+if [ ! -r "$RECIPE" ]; then
+	die "no recipe for site $SITE ($RECIPE missing)"
+fi
+# Defaults before sourcing: recipes may override; set -u needs declared arrays.
+attic_trees=()
+publish_excludes=()
+
+# shellcheck disable=SC1090
+. "$RECIPE"
+if [ "${site:-}" != "$SITE" ]; then
+	die "recipe $RECIPE declares site '${site:-}' but deployd dispatched $SITE"
+fi
+attic_dir="${attic_dir:-$HOME/$SITE-attic}"
+
+trap on_err ERR
+say "=== deploy start ($BRANCH, sha=$SHA, job=$DEPLOY_JOB_ID) ==="
+
+if declare -F prepare >/dev/null; then prepare; fi
+if declare -F build >/dev/null; then build; fi
+if declare -F publish >/dev/null; then
+	publish
+elif [ -n "${dest:-}" ]; then
+	publish_tree "${out:-dist}" "$dest"
+else
+	die "recipe defines neither publish() nor dest"
+fi
+
+say "=== deploy done (${SHA:0:7}) ==="
+dc_notify success "${SHA:0:7}"

@@ -1,0 +1,14 @@
+# sonny-boy — sonny-boy.xeed.ink. Runs as sonny-boy-ci, cwd = checked-out
+# worktree (DEPLOY_COMMIT; LFS smudge already ran during checkout —
+# /etc/gitconfig has filter.lfs required=true and git-lfs is in sudo's
+# secure_path). Static exhibition site: stills/faces/BGM are Git LFS
+# objects; stable filenames → replace-all rsync, no attic.
+site=sonny-boy
+dest=/srv/sonny-boy
+out=.
+publish_excludes=(/.git /src /scripts /README.md /.gitattributes /.nojekyll)
+
+prepare() {
+	lfs_pull
+	check_lfs_pointers assets
+}

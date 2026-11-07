@@ -28,55 +28,55 @@ sites:
   - name: blog
     repo: https://github.com/xihale/blog
     branch: astro
-    script: /var/lib/deployd/scripts/blog.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <openssl rand -hex 20>
     run_as: blog-ci
   - name: zig-playground
     repo: https://github.com/xihale/zig-playground
     branch: master
-    script: /var/lib/deployd/scripts/zig-playground.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: zig-ci
   - name: poetry
     repo: https://github.com/xihale/poetry
     branch: main
-    script: /var/lib/deployd/scripts/poetry.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: poetry-ci
   - name: schedmate
     repo: https://github.com/xihale/schedmate
     branch: main
-    script: /var/lib/deployd/scripts/schedmate.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: sched-ci
   - name: ziglings-web
     repo: https://github.com/xihale/ziglings-web
     branch: main
-    script: /var/lib/deployd/scripts/ziglings-web.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: ziglings-ci
   - name: foyer
     repo: https://github.com/xihale/foyer
     branch: main
-    script: /var/lib/deployd/scripts/foyer.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: foyer-ci
   - name: me
     repo: git@github.com:xihale/me.git
     branch: main
-    script: /var/lib/deployd/scripts/me.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: me-ci
   - name: light-cathedral
     repo: https://github.com/xihale/light-cathedral.git
     branch: main
-    script: /var/lib/deployd/scripts/light-cathedral.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: lc-ci
   - name: sonny-boy
     repo: git@github.com:xihale/sonny-boy.git
     branch: main
-    script: /var/lib/deployd/scripts/sonny-boy.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: sonny-boy-ci
   # deploy-control itself (self-bootstrap); no run_as: runs as the service
@@ -84,5 +84,5 @@ sites:
   - name: deploy-control
     repo: https://github.com/xihale/deploy-control
     branch: main
-    script: /var/lib/deployd/scripts/deploy-control.sh
+    script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>

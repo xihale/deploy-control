@@ -1,0 +1,18 @@
+# blog — xeed.ink. Runs as blog-ci, cwd = checked-out worktree (DEPLOY_COMMIT).
+# Gates kept identical to the old webhook-era script: bun lint (autocorrect
+# --fix mutates tracked files; deployd's next checkout -f wipes them, same
+# cleanup role the old script's git reset --hard played) → astro check →
+# astro build. Publish: /var/www/xeed.ink with the /_astro attic policy
+# (browser-cached HTML may reference retired chunks).
+site=blog
+dest=/var/www/xeed.ink
+out=dist
+attic_trees=(_astro)
+publish_excludes=(/deploy-status.json)
+
+prepare() { bun install --frozen-lockfile; }
+build() {
+	bun run lint
+	bunx astro check
+	bun run build
+}

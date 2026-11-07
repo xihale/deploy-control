@@ -1,0 +1,11 @@
+# me — me.xeed.ink. Runs as me-ci, cwd = checked-out worktree (DEPLOY_COMMIT).
+# bun install + astro build, then rsync into /srv/me with the /_astro attic
+# policy (browser-cached HTML may reference retired chunks).
+site=me
+dest=/srv/me
+out=dist
+attic_trees=(_astro)
+publish_excludes=(/deploy-status.json)
+
+prepare() { bun install --frozen-lockfile; }
+build() { bun run build; }

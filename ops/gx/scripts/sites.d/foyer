@@ -1,0 +1,44 @@
+# foyer — home.xeed.ink. Runs as foyer-ci (login shell /bin/sh — the
+# runner's bash shebang is what matters), cwd = checked-out worktree
+# (DEPLOY_COMMIT).
+#   1. Go toolchain bootstrap (gx has no system go)
+#   2. bun install + qwik build → frontend/dist (go:embed eats it)
+#   3. go build → ~/.local/bin/foyer
+#   4. systemctl --user restart foyer; Caddy proxies home.xeed.ink → :3002
+# Data (db + fetched icons) lives at ~/.local/state/foyer and is never touched.
+site=foyer
+
+prepare() {
+	go_env 1.26.5 # keep in sync with go.mod's go directive; bump both together
+	user_bus_env  # deployd spawns us without a login session
+}
+
+build() {
+	(cd frontend && bun install --frozen-lockfile && bun run build)
+	"$GO" build -trimpath -ldflags='-s -w' -o "$HOME/.local/bin/foyer.new" .
+}
+
+publish() {
+	local BIN="$HOME/.local/bin/foyer"
+	if [ -f "$BIN" ]; then cp "$BIN" "$BIN.prev"; fi # one-shot rollback copy
+	mv "$BIN.new" "$BIN"
+	mkdir -p "$HOME/.config/systemd/user"
+	cat scripts/server/foyer.service > "$HOME/.config/systemd/user/foyer.service"
+	systemctl --user daemon-reload
+	systemctl --user enable --now foyer
+	systemctl --user restart foyer
+	local up=0 n
+	for n in $(seq 1 30); do
+		if curl -fsS -m 2 -o /dev/null http://127.0.0.1:3002/; then up=1; break; fi
+		sleep 0.5
+	done
+	if [ "$up" != 1 ]; then
+		if [ -f "$BIN.prev" ]; then
+			say "service did not come up — rolling back to previous binary"
+			cp "$BIN.prev" "$BIN"
+			systemctl --user restart foyer
+		fi
+		die "foyer not healthy on 127.0.0.1:3002 after restart"
+	fi
+	say "published ${SHA:0:7} → $BIN (foyer active, :3002 healthy)"
+}

@@ -1,0 +1,15 @@
+# poetry — poetry.xeed.ink. Runs as poetry-ci, cwd = checked-out worktree
+# (DEPLOY_COMMIT). Build is pure (corpus is committed): corpus-check →
+# generate. /_nuxt /corpus /fonts are immutable-cached bundles / corpus
+# stamps / fonts referenced by cached CSS: attic policy, attic pruned by age.
+site=poetry
+dest=/srv/poetry
+out=.output/public
+attic_trees=(_nuxt corpus fonts)
+publish_excludes=(/deploy-status.json)
+
+prepare() { bun install --frozen-lockfile; }
+build() {
+	bun run corpus-check
+	bun run generate
+}

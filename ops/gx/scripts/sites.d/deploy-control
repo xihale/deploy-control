@@ -1,0 +1,38 @@
+# deploy-control — deploy.xeed.ink. Self-bootstrap: deployd builds and
+# deploys itself from this repo. Runs as the deployd service user (root, no
+# run_as) because it installs the binary and restarts the service; HOME
+# defaults to /root inside run-site.
+#   1. corepack pnpm build → web/out
+#   2. go build → deployd.new
+#   3. rsync web/out → /var/lib/deployd/web/out (live web root)
+#   4. binary changed → swap + restart deferred via systemd-run so this job
+#      can still exit 0 and be recorded before the service bounces
+site=deploy-control
+
+prepare() {
+	go_env 1.26.5 /var/lib/deployd/toolchain/go # >= go.mod's directive; bump together
+}
+
+build() {
+	( cd web && corepack pnpm install --frozen-lockfile && corepack pnpm build )
+	if [ ! -f web/out/index.html ]; then
+		die "web/out/index.html missing after build"
+	fi
+	"$GO" build -trimpath -o deployd.new ./cmd/deployd
+}
+
+publish() {
+	local WEB_ROOT=/var/lib/deployd/web/out BIN=/usr/local/bin/deployd
+	rsync -a --delete web/out/ "$WEB_ROOT"/
+	say "web published → $WEB_ROOT"
+	if cmp -s deployd.new "$BIN"; then
+		say "binary unchanged; web-only deploy, no restart"
+	else
+		say "binary changed; scheduling deferred swap + restart"
+		install -m755 deployd.new "$BIN.next"
+		# Unique unit suffix: rapid consecutive binary deploys must not collide
+		# with a still-pending transient timer.
+		systemd-run --on-active=3 --unit=deployd-self-restart-$DEPLOY_JOB_ID --collect \
+			/bin/sh -c "install -m755 '$BIN.next' '$BIN' && rm -f '$BIN.next' && systemctl restart deployd"
+	fi
+}

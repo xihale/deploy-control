@@ -1,0 +1,19 @@
+# ziglings-web — zlg.xeed.ink. Runs as ziglings-ci, cwd = checked-out
+# worktree (DEPLOY_COMMIT). Pure consumer of zp compilers (loaded at runtime
+# via zp-loader.js). Deploy = CI gate (catalog integrity, smoke, unit tests,
+# version alignment — a failing check keeps the old site live) → vite build
+# → replace-all rsync. The vendor/ziglings-src submodule is NOT needed:
+# builds and checks use the committed vendor/ziglings tree.
+site=ziglings-web
+dest=/srv/ziglings-web
+out=dist
+
+build() {
+	npm ci
+	# CI gate: same checks as .github/workflows/ci.yml
+	npm run check-catalog
+	npm run smoke-verify
+	npm test
+	npm run check-version-alignment
+	npm run build
+}

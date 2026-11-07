@@ -1,0 +1,7 @@
+# light-cathedral — lc.xeed.ink. Runs as lc-ci, cwd = checked-out worktree
+# (DEPLOY_COMMIT). Pure static site: no build. Plain replace-all rsync, no
+# attic (no content-hashed assets).
+site=light-cathedral
+dest=/srv/light-cathedral
+out=.
+publish_excludes=(/.git/ /scripts/ /README.md)
