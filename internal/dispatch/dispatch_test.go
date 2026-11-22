@@ -73,7 +73,7 @@ func (f *fakeDeployer) setPanics(id int64) {
 	f.mu.Unlock()
 }
 
-func (f *fakeDeployer) Deploy(ctx context.Context, site config.Site, branch, sha string, jobID int64) (runner.Result, error) {
+func (f *fakeDeployer) Deploy(ctx context.Context, site config.Site, branch, sha, triggerType string, jobID int64) (runner.Result, error) {
 	// Record the claim (start) FIRST: tests wait for a blocked job to show
 	// up as claimed before releasing its block.
 	f.mu.Lock()

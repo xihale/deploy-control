@@ -136,12 +136,15 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type siteView struct {
-		Name      string `json:"name"`
-		Repo      string `json:"repo"`
-		Branch    string `json:"branch"`
-		Script    string `json:"script"`
-		HasSecret bool   `json:"has_webhook_secret"`
-		RunAs     string `json:"run_as,omitempty"`
+		Name      string   `json:"name"`
+		Repo      string   `json:"repo"`
+		Branch    string   `json:"branch"`
+		URL       string   `json:"url,omitempty"`
+		RefRegex  string   `json:"ref_regex,omitempty"`
+		Events    []string `json:"events,omitempty"`
+		Script    string   `json:"script"`
+		HasSecret bool     `json:"has_webhook_secret"`
+		RunAs     string   `json:"run_as,omitempty"`
 	}
 	out := make([]siteView, 0, len(s.Cfg.Sites))
 	for _, site := range s.Cfg.Sites {
@@ -149,6 +152,9 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			Name:      site.Name,
 			Repo:      site.Repo,
 			Branch:    site.Branch,
+			URL:       site.URL,
+			RefRegex:  site.RefRegex,
+			Events:    site.Events,
 			Script:    site.Script,
 			HasSecret: site.WebhookSecret != "",
 			RunAs:     site.RunAs,

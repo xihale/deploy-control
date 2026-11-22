@@ -104,7 +104,7 @@ type Runner struct {
 // user and runs the site script. Never fakes success: every failure returns
 // an error that names the job log path (persisted by the dispatcher), and
 // every exit code is the script's real one.
-func (r *Runner) Deploy(ctx context.Context, site config.Site, branch, sha string, jobID int64) (Result, error) {
+func (r *Runner) Deploy(ctx context.Context, site config.Site, branch, sha, triggerType string, jobID int64) (Result, error) {
 	start := time.Now()
 	res := Result{ExitCode: -1}
 
@@ -165,7 +165,7 @@ func (r *Runner) Deploy(ctx context.Context, site config.Site, branch, sha strin
 		return fail(fmt.Errorf("checkout mismatch: recorded %s, tree at %s", checked, strings.TrimSpace(verify)))
 	}
 
-	exit, runErr := r.runScript(ctx, site, script, workDir, branch, checked, logFile, jobID)
+	exit, runErr := r.runScript(ctx, site, script, workDir, branch, checked, triggerType, logFile, jobID)
 	res.ExitCode = exit
 	res.Duration = time.Since(start)
 
@@ -248,12 +248,21 @@ func (r *Runner) prepareWorktree(ctx context.Context, site config.Site, workDir,
 		if out, err := r.Fetch.CheckoutLocal(ctx, workDir, runAs, "cat-file", "-e", sha+"^{commit}"); err != nil {
 			return "", fmt.Errorf("sha %s not found after fetch (%s)", sha, strings.TrimSpace(out))
 		}
-		if out, err := r.Fetch.CheckoutLocal(ctx, workDir, runAs, "checkout", "-f", "--detach", sha); err != nil {
-			return "", fmt.Errorf("checkout %s: %v: %s", sha, err, strings.TrimSpace(out))
+		targetOut, err := r.Fetch.CheckoutLocal(ctx, workDir, runAs, "rev-parse", "--verify", sha+"^{commit}")
+		if err != nil {
+			return "", fmt.Errorf("resolve commit %s: %v: %s", sha, err, strings.TrimSpace(targetOut))
 		}
+		targetSHA := strings.TrimSpace(targetOut)
+		if out, err := r.Fetch.CheckoutLocal(ctx, workDir, runAs, "checkout", "-f", "--detach", targetSHA); err != nil {
+			return "", fmt.Errorf("checkout %s: %v: %s", targetSHA, err, strings.TrimSpace(out))
+		}
+		sha = targetSHA
 	} else {
 		if out, err := r.Fetch.CheckoutLocal(ctx, workDir, runAs, branchCheckoutArgs(branch)...); err != nil {
-			return "", fmt.Errorf("checkout branch %s: %v: %s", branch, err, strings.TrimSpace(out))
+			// Also allow manual deploys targeting a fetched tag name via `branch`.
+			if _, tagErr := r.Fetch.CheckoutLocal(ctx, workDir, runAs, "checkout", "-f", "--detach", "refs/tags/"+branch); tagErr != nil {
+				return "", fmt.Errorf("checkout branch %s: %v: %s", branch, err, strings.TrimSpace(out))
+			}
 		}
 	}
 
@@ -312,12 +321,13 @@ func chownTree(root, runAs string) error {
 // writes combined output to the job log. The child runs in its own process
 // group; the deploy timeout kills the whole group. Returns the real exit
 // code.
-func (r *Runner) runScript(ctx context.Context, site config.Site, script, workDir, branch, sha string, logFile io.Writer, jobID int64) (int, error) {
+func (r *Runner) runScript(ctx context.Context, site config.Site, script, workDir, branch, sha, triggerType string, logFile io.Writer, jobID int64) (int, error) {
 	env := scrubProxy(os.Environ())
 	env = append(env,
 		"DEPLOY_SITE="+site.Name,
 		"DEPLOY_BRANCH="+branch,
 		"DEPLOY_COMMIT="+sha,
+		"DEPLOY_TRIGGER="+triggerType,
 		"DEPLOY_JOB_ID="+strconv.FormatInt(jobID, 10),
 		"DEPLOY_FETCH_PROXY="+r.Fetch.Proxy,
 	)

@@ -4,9 +4,11 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -29,12 +31,16 @@ type User struct {
 
 // Site is a deployable site bound to one git repo, branch and script.
 type Site struct {
-	Name          string `yaml:"name"`
-	Repo          string `yaml:"repo"`
-	Branch        string `yaml:"branch"`
-	Script        string `yaml:"script"`
-	WebhookSecret string `yaml:"webhook_secret"`
-	RunAs         string `yaml:"run_as"` // optional unix user for CI isolation; empty = current user
+	Name             string   `yaml:"name"`
+	Repo             string   `yaml:"repo"`
+	Branch           string   `yaml:"branch"`
+	URL              string   `yaml:"url"`
+	RefRegex         string   `yaml:"ref_regex"` // optional regex matching full webhook ref (e.g. ^refs/tags/web-v[0-9]+\.[0-9]+\.[0-9]+$)
+	Events           []string `yaml:"events"`    // optional GitHub webhook events (push, release); empty defaults to ["push"]
+	Script           string   `yaml:"script"`
+	WebhookSecret    string   `yaml:"webhook_secret"`
+	RunAs            string   `yaml:"run_as"` // optional unix user for CI isolation; empty = current user
+	compiledRefRegex *regexp.Regexp
 }
 
 // Fetch holds the unified fetch policy. Attempt 1 is always forced direct;
@@ -162,6 +168,8 @@ func (c *Config) validate(cfgPath string) error {
 		s.Name = strings.TrimSpace(s.Name)
 		s.Repo = strings.TrimSpace(s.Repo)
 		s.Branch = strings.TrimSpace(s.Branch)
+		s.URL = strings.TrimSpace(s.URL)
+		s.RefRegex = strings.TrimSpace(s.RefRegex)
 		s.Script = strings.TrimSpace(s.Script)
 		s.RunAs = strings.TrimSpace(s.RunAs)
 		if !nameRe.MatchString(s.Name) {
@@ -176,6 +184,37 @@ func (c *Config) validate(cfgPath string) error {
 		}
 		if !ValidBranch(s.Branch) {
 			return fmt.Errorf("config: site %q invalid branch %q", s.Name, s.Branch)
+		}
+		if s.URL != "" {
+			u, err := url.Parse(s.URL)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return fmt.Errorf("config: site %q invalid url %q", s.Name, s.URL)
+			}
+		}
+		if s.RefRegex != "" {
+			re, err := regexp.Compile(s.RefRegex)
+			if err != nil {
+				return fmt.Errorf("config: site %q invalid ref_regex %q: %w", s.Name, s.RefRegex, err)
+			}
+			s.compiledRefRegex = re
+		}
+		if len(s.Events) > 0 {
+			seenEvents := map[string]bool{}
+			normalized := make([]string, 0, len(s.Events))
+			for _, raw := range s.Events {
+				ev := strings.ToLower(strings.TrimSpace(raw))
+				switch ev {
+				case "push", "release":
+				default:
+					return fmt.Errorf("config: site %q unsupported webhook event %q (want push or release)", s.Name, raw)
+				}
+				if seenEvents[ev] {
+					return fmt.Errorf("config: site %q duplicate webhook event %q", s.Name, ev)
+				}
+				seenEvents[ev] = true
+				normalized = append(normalized, ev)
+			}
+			s.Events = normalized
 		}
 		if !filepath.IsAbs(s.Script) {
 			return fmt.Errorf("config: site %q script %q must be an absolute path", s.Name, s.Script)
@@ -264,4 +303,26 @@ func ValidSHA(s string) bool { return shaRe.MatchString(s) }
 // ValidBranch reports whether s is a safe branch name for CLI use.
 func ValidBranch(s string) bool {
 	return branchRe.MatchString(s) && !strings.HasPrefix(s, "-") && !strings.HasPrefix(s, "/") && !strings.HasSuffix(s, "/") && !strings.HasSuffix(s, ".") && !strings.Contains(s, "..") && !strings.Contains(s, "//") && !strings.Contains(s, "@{")
+}
+
+// RefPattern returns the compiled webhook ref regex when configured, or nil
+// for default branch matching.
+func (s Site) RefPattern() (*regexp.Regexp, error) {
+	if s.compiledRefRegex != nil {
+		return s.compiledRefRegex, nil
+	}
+	if s.RefRegex == "" {
+		return nil, nil
+	}
+	return regexp.Compile(s.RefRegex)
+}
+
+// AllowsEvent reports whether event (GitHub X-GitHub-Event) is enabled for s.
+// Sites without explicit events config default to accepting push only.
+func (s Site) AllowsEvent(event string) bool {
+	ev := strings.ToLower(strings.TrimSpace(event))
+	if len(s.Events) == 0 {
+		return ev == "push"
+	}
+	return slices.Contains(s.Events, ev)
 }

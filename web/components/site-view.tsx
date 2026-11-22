@@ -11,6 +11,7 @@ import {
   CopyIcon,
   ExternalLinkIcon,
   GitBranchIcon,
+  GlobeIcon,
   InboxIcon,
   WebhookIcon,
 } from 'lucide-react'
@@ -21,7 +22,7 @@ import { PulseStrip } from '@/components/pulse-strip'
 import { ErrorState } from '@/components/states'
 import { StatusDot } from '@/components/status-badge'
 import { useDeploys, useSites } from '@/hooks/use-api'
-import { repoLabel, repoUrl } from '@/lib/format'
+import { repoLabel, repoUrl, safeHttpUrl, siteUrlLabel } from '@/lib/format'
 import { STATUS, STATUS_ORDER } from '@/lib/status'
 import { cn } from '@/lib/utils'
 import type { DeployStatus, Site } from '@/lib/types'
@@ -84,6 +85,16 @@ function AccessPanel({ site }: { site: Site }) {
             </Button>
           </dd>
         </div>
+        {site.ref_regex && (
+          <div className="flex flex-wrap items-center gap-2">
+            <dt className="w-20 shrink-0 text-xs text-muted-foreground">
+              Ref 规则
+            </dt>
+            <dd className="min-w-0 flex-1 truncate font-mono text-xs">
+              {site.ref_regex}
+            </dd>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <dt className="w-20 shrink-0 text-xs text-muted-foreground">脚本</dt>
           <dd className="min-w-0 flex-1 truncate font-mono text-xs">
@@ -128,7 +139,8 @@ export function SiteView() {
 
   const total = list.data?.total ?? 0
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const href = site ? repoUrl(site.repo) : undefined
+  const repoHref = site ? repoUrl(site.repo) : undefined
+  const websiteHref = safeHttpUrl(site?.url)
 
   return (
     <div className="space-y-8">
@@ -143,9 +155,21 @@ export function SiteView() {
                 <GitBranchIcon className="size-3.5" />
                 {site.branch}
               </span>
-              {href ? (
+              {websiteHref && (
                 <a
-                  href={href}
+                  href={websiteHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 hover:text-foreground"
+                >
+                  <GlobeIcon className="size-3.5" />
+                  {siteUrlLabel(websiteHref)}
+                  <ExternalLinkIcon className="size-3" />
+                </a>
+              )}
+              {repoHref ? (
+                <a
+                  href={repoHref}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-1.5 font-mono hover:text-foreground"

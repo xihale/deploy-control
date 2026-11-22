@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChevronRightIcon, GitCommitHorizontalIcon, UserIcon } from 'lucide-react'
+import { ChevronRightIcon, GitCommitHorizontalIcon, TagIcon, UserIcon } from 'lucide-react'
 import { StatusBadge } from '@/components/status-badge'
 import { durationBetween, shortSha, timeAgo } from '@/lib/format'
 import { isActive } from '@/lib/status'
@@ -17,7 +17,18 @@ export function DeployRow({
     job.started_at,
     isActive(job.status) ? undefined : job.finished_at,
   )
-  const TriggerIcon = job.trigger_type === 'manual' ? UserIcon : GitCommitHorizontalIcon
+  const TriggerIcon =
+    job.trigger_type === 'manual'
+      ? UserIcon
+      : job.trigger_type === 'release'
+        ? TagIcon
+        : GitCommitHorizontalIcon
+  const triggerLabel =
+    job.trigger_type === 'manual'
+      ? '手动触发'
+      : job.trigger_type === 'release'
+        ? '发布触发'
+        : '推送触发'
 
   return (
     <Link
@@ -34,12 +45,10 @@ export function DeployRow({
         <span className="font-mono text-sm font-medium tabular-nums">#{job.id}</span>
         <span
           className="flex items-center gap-1.5 text-muted-foreground"
-          title={job.trigger_type === 'manual' ? '手动触发' : '推送触发'}
+          title={triggerLabel}
         >
           <TriggerIcon className="size-4" />
-          <span className="sr-only">
-            {job.trigger_type === 'manual' ? '手动触发' : '推送触发'}
-          </span>
+          <span className="sr-only">{triggerLabel}</span>
         </span>
         <span className="truncate font-mono text-sm text-muted-foreground">
           {sha ?? job.branch}

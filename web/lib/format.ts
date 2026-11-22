@@ -35,13 +35,42 @@ export function shortSha(sha?: string) {
   return sha ? sha.slice(0, 7) : null
 }
 
-export function repoLabel(repo: string) {
-  return repo
-    .replace(/^https?:\/\//, '')
-    .replace(/^github\.com\//, '')
-    .replace(/\.git$/, '')
+const GITHUB_REMOTE_RE =
+  /^(?:(?:https?|ssh):\/\/)?(?:git@)?github\.com(?::\d+)?[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i
+
+export function repoLabel(repo: string): string {
+  if (!repo) return ''
+  const trimmed = repo.trim()
+  const gh = trimmed.match(GITHUB_REMOTE_RE)
+  if (gh) {
+    return `${gh[1]}/${gh[2]}`
+  }
+  return trimmed
+    .replace(/^(?:https?|ssh):\/\//i, '')
+    .replace(/^git@[^:]+:/i, '')
+    .replace(/\.git$/i, '')
 }
 
-export function repoUrl(repo: string) {
-  return /^https?:\/\//.test(repo) ? repo.replace(/\.git$/, '') : undefined
+export function repoUrl(repo?: string): string | undefined {
+  if (!repo) return undefined
+  const trimmed = repo.trim()
+  const gh = trimmed.match(GITHUB_REMOTE_RE)
+  if (gh) {
+    return `https://github.com/${gh[1]}/${gh[2]}`
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\.git$/i, '')
+  }
+  return undefined
+}
+
+export function safeHttpUrl(raw?: string): string | undefined {
+  if (!raw) return undefined
+  const trimmed = raw.trim()
+  return /^https?:\/\//i.test(trimmed) ? trimmed : undefined
+}
+
+export function siteUrlLabel(raw: string): string {
+  if (!raw) return ''
+  return raw.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '')
 }

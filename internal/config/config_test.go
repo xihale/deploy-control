@@ -71,3 +71,119 @@ func TestWebDirResolvesRelativeToConfig(t *testing.T) {
 		t.Fatalf("absolute web root = %q, want %q", got, want)
 	}
 }
+
+func TestSiteRefRegexValidation(t *testing.T) {
+	dir := t.TempDir()
+	valid := Config{
+		Users: []User{{Name: "admin", TokenHash: strings.Repeat("a", 64), Role: RoleAdmin}},
+		Sites: []Site{{
+			Name:     "upix-web",
+			Repo:     "/tmp/repo",
+			Branch:   "main",
+			RefRegex: `^refs/tags/web-v[0-9]+\.[0-9]+\.[0-9]+$`,
+			Script:   "/tmp/deploy",
+		}},
+	}
+	if err := valid.validate(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Fatalf("valid ref_regex failed: %v", err)
+	}
+	re, err := valid.Sites[0].RefPattern()
+	if err != nil || re == nil || !re.MatchString("refs/tags/web-v0.2.0") || re.MatchString("refs/tags/web-v0.2.0-beta.1") {
+		t.Fatalf("compiled ref_regex mismatch: re=%v err=%v", re, err)
+	}
+
+	bad := valid
+	bad.Sites = []Site{{
+		Name:     "upix-web",
+		Repo:     "/tmp/repo",
+		Branch:   "main",
+		RefRegex: `[unclosed`,
+		Script:   "/tmp/deploy",
+	}}
+	if err := bad.validate(filepath.Join(dir, "config.yaml")); err == nil {
+		t.Fatal("invalid ref_regex must fail validation")
+	}
+}
+
+func TestSiteURLValidation(t *testing.T) {
+	dir := t.TempDir()
+	baseSite := Site{
+		Name:   "blog",
+		Repo:   "/tmp/repo",
+		Branch: "main",
+		Script: "/tmp/deploy",
+	}
+
+	for _, raw := range []string{
+		"",
+		"https://blog.example.com",
+		"http://blog.example.com",
+		"https://example.com/sub/path",
+		"http://localhost:8080",
+	} {
+		cfg := Config{
+			Users: []User{{Name: "admin", TokenHash: strings.Repeat("a", 64), Role: RoleAdmin}},
+			Sites: []Site{baseSite},
+		}
+		cfg.Sites[0].URL = raw
+		if err := cfg.validate(filepath.Join(dir, "config.yaml")); err != nil {
+			t.Fatalf("expected url %q to be valid, got: %v", raw, err)
+		}
+	}
+
+	for _, raw := range []string{
+		"javascript:alert(1)",
+		"https://",
+		"http://",
+		"ftp://example.com",
+		"file:///etc/passwd",
+		"not-a-url",
+		"://bad",
+	} {
+		cfg := Config{
+			Users: []User{{Name: "admin", TokenHash: strings.Repeat("a", 64), Role: RoleAdmin}},
+			Sites: []Site{baseSite},
+		}
+		cfg.Sites[0].URL = raw
+		if err := cfg.validate(filepath.Join(dir, "config.yaml")); err == nil {
+			t.Fatalf("expected url %q to be rejected, but validation succeeded", raw)
+		}
+	}
+}
+
+func TestSiteEventsValidation(t *testing.T) {
+	dir := t.TempDir()
+	baseSite := Site{
+		Name:   "mintcal",
+		Repo:   "https://github.com/xihale/goke",
+		Branch: "main",
+		Script: "/tmp/deploy",
+	}
+
+	if !baseSite.AllowsEvent("push") || baseSite.AllowsEvent("release") {
+		t.Fatalf("default events should allow push only")
+	}
+
+	cfg := Config{
+		Users: []User{{Name: "admin", TokenHash: strings.Repeat("a", 64), Role: RoleAdmin}},
+		Sites: []Site{baseSite},
+	}
+	cfg.Sites[0].Events = []string{" Push ", "RELEASE"}
+	if err := cfg.validate(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Fatalf("expected push+release events to be valid, got: %v", err)
+	}
+	if !cfg.Sites[0].AllowsEvent("push") || !cfg.Sites[0].AllowsEvent("release") || cfg.Sites[0].AllowsEvent("ping") {
+		t.Fatalf("normalized events did not match expectations: %v", cfg.Sites[0].Events)
+	}
+
+	for _, bad := range [][]string{{"issues"}, {"push", "push"}, {""}} {
+		badCfg := Config{
+			Users: []User{{Name: "admin", TokenHash: strings.Repeat("a", 64), Role: RoleAdmin}},
+			Sites: []Site{baseSite},
+		}
+		badCfg.Sites[0].Events = bad
+		if err := badCfg.validate(filepath.Join(dir, "config.yaml")); err == nil {
+			t.Fatalf("expected events %v to be rejected", bad)
+		}
+	}
+}

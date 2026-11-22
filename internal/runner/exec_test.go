@@ -128,7 +128,7 @@ func runScriptForTest(t *testing.T, ctx context.Context, scriptBody string) (int
 	defer logFile.Close()
 	r := &Runner{Fetch: &fetcher.Fetcher{Proxy: "http://127.0.0.1:7654"}}
 	site := config.Site{Name: "t", Branch: "main"}
-	code, runErr := r.runScript(ctx, site, script, dir, "main", "abc123", logFile, 7)
+	code, runErr := r.runScript(ctx, site, script, dir, "main", "abc123", "push", logFile, 7)
 	data, _ := os.ReadFile(logPath)
 	return code, runErr, string(data)
 }
@@ -173,7 +173,7 @@ func TestRunScriptTimeoutKillsProcessGroup(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	r := &Runner{Fetch: &fetcher.Fetcher{}}
-	code, runErr := r.runScript(ctx, config.Site{Name: "t"}, script, dir, "main", "abc", logFile, 1)
+	code, runErr := r.runScript(ctx, config.Site{Name: "t"}, script, dir, "main", "abc", "release", logFile, 1)
 	if runErr == nil {
 		t.Fatal("timed-out script must return an error")
 	}

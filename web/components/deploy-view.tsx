@@ -9,6 +9,7 @@ import {
   GitCommitHorizontalIcon,
   Loader2Icon,
   RocketIcon,
+  TagIcon,
   UserIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -203,10 +204,12 @@ export function DeployView() {
             <span className="flex items-center gap-1.5 font-sans">
               {job.trigger_type === 'manual' ? (
                 <UserIcon className="size-3.5" />
+              ) : job.trigger_type === 'release' ? (
+                <TagIcon className="size-3.5" />
               ) : (
                 <GitCommitHorizontalIcon className="size-3.5" />
               )}
-              {job.trigger_type === 'manual' ? '手动' : '推送'}
+              {job.trigger_type === 'manual' ? '手动' : job.trigger_type === 'release' ? '发布' : '推送'}
             </span>
           </Fact>
           <Fact label="分支">

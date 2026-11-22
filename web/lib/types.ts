@@ -9,6 +9,9 @@ export interface Site {
   name: string
   repo: string
   branch: string
+  url?: string
+  ref_regex?: string
+  events?: string[]
   script: string
   has_webhook_secret: boolean
   run_as?: string
@@ -17,7 +20,7 @@ export interface Site {
 export interface DeployJob {
   id: number
   site: string
-  trigger_type: 'push' | 'manual' | string
+  trigger_type: 'push' | 'release' | 'manual' | string
   branch: string
   sha?: string
   checked_sha?: string

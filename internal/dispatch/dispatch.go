@@ -19,7 +19,7 @@ import (
 // Deployer executes one deployment. *runner.Runner satisfies it; the
 // interface exists so tests can inject a fake deployer.
 type Deployer interface {
-	Deploy(ctx context.Context, site config.Site, branch, sha string, jobID int64) (runner.Result, error)
+	Deploy(ctx context.Context, site config.Site, branch, sha, triggerType string, jobID int64) (runner.Result, error)
 }
 
 // Dispatcher consumes queued jobs from the store.
@@ -193,7 +193,7 @@ func (d *Dispatcher) runJob(job store.Job) {
 	ctx, cancel := context.WithTimeout(d.ctx, timeoutFor(d.cfg))
 	defer cancel()
 
-	res, err := d.runner.Deploy(ctx, site, branch, job.SHA, job.ID)
+	res, err := d.runner.Deploy(ctx, site, branch, job.SHA, job.TriggerType, job.ID)
 	switch {
 	case d.ctx.Err() != nil:
 		d.finish(job.ID, store.StatusFailed, intPtr(res.ExitCode), res.CheckedSHA, "interrupted by shutdown")

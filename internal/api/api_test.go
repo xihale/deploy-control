@@ -67,3 +67,42 @@ func TestSitesReturnsArrayNotNull(t *testing.T) {
 		t.Fatalf("sites without config rows must serialize as [], got %q", body)
 	}
 }
+
+func TestSitesIncludesOptionalURL(t *testing.T) {
+	srv, token := newTestServer(t)
+	srv.Cfg.Sites = []config.Site{
+		{
+			Name:   "with-url",
+			Repo:   "https://github.com/example/with.git",
+			Branch: "main",
+			URL:    "https://example.com",
+			Script: "/bin/true",
+		},
+		{
+			Name:   "without-url",
+			Repo:   "https://github.com/example/without.git",
+			Branch: "main",
+			Script: "/bin/true",
+		},
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/sites", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	var sites []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &sites); err != nil {
+		t.Fatalf("unmarshal error: %v, body=%s", err, rec.Body.String())
+	}
+	if len(sites) != 2 {
+		t.Fatalf("expected 2 sites, got %d", len(sites))
+	}
+	if sites[0]["url"] != "https://example.com" {
+		t.Fatalf("expected url 'https://example.com', got %v", sites[0]["url"])
+	}
+	if _, ok := sites[1]["url"]; ok {
+		t.Fatalf("expected no url field for site without url, got %v", sites[1]["url"])
+	}
+}

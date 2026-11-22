@@ -2,13 +2,26 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { GitBranchIcon, InboxIcon, ServerOffIcon } from 'lucide-react'
+import {
+  ExternalLinkIcon,
+  GitBranchIcon,
+  GlobeIcon,
+  InboxIcon,
+  ServerOffIcon,
+} from 'lucide-react'
 import { DeployRow } from '@/components/deploy-row'
 import { PulseStrip } from '@/components/pulse-strip'
 import { StatusDot } from '@/components/status-badge'
 import { ErrorState, PageSkeleton } from '@/components/states'
 import { useDeploys, useSites } from '@/hooks/use-api'
-import { repoLabel, shortSha, timeAgo } from '@/lib/format'
+import {
+  repoLabel,
+  repoUrl,
+  safeHttpUrl,
+  shortSha,
+  siteUrlLabel,
+  timeAgo,
+} from '@/lib/format'
 import { STATUS, STATUS_ORDER } from '@/lib/status'
 import { cn } from '@/lib/utils'
 import type { DeployJob, DeployStatus, Site } from '@/lib/types'
@@ -17,16 +30,22 @@ function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
   const latest = jobs[0]
   const meta = latest ? STATUS[latest.status] : null
   const sha = shortSha(latest?.checked_sha ?? latest?.sha)
+  const repoHref = repoUrl(site.repo)
+  const websiteHref = safeHttpUrl(site.url)
 
   return (
-    <Link
-      href={`/site?name=${encodeURIComponent(site.name)}`}
+    <article
       className={cn(
-        'group surface relative flex flex-col gap-5 rounded-2xl border bg-card p-5',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        'group surface relative flex flex-col gap-4 rounded-2xl border bg-card p-5',
         latest?.status === 'failed' && 'border-bad/40',
       )}
     >
+      <Link
+        href={`/site?name=${encodeURIComponent(site.name)}`}
+        aria-label={`查看 ${site.name} 详情`}
+        className="absolute inset-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      />
+
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {latest ? (
@@ -44,6 +63,33 @@ function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
         </span>
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {websiteHref && (
+          <a
+            href={websiteHref}
+            target="_blank"
+            rel="noreferrer"
+            className="relative z-10 flex min-w-0 items-center gap-1.5 hover:text-foreground transition-colors"
+          >
+            <GlobeIcon className="size-3.5 shrink-0" />
+            <span className="truncate">{siteUrlLabel(websiteHref)}</span>
+          </a>
+        )}
+        {repoHref ? (
+          <a
+            href={repoHref}
+            target="_blank"
+            rel="noreferrer"
+            className="relative z-10 flex min-w-0 items-center gap-1 font-mono hover:text-foreground transition-colors"
+          >
+            <span className="truncate">{repoLabel(site.repo)}</span>
+            <ExternalLinkIcon className="size-3 shrink-0" />
+          </a>
+        ) : (
+          <span className="truncate font-mono">{repoLabel(site.repo)}</span>
+        )}
+      </div>
+
       <PulseStrip jobs={jobs} />
 
       <div className="flex items-center justify-between gap-3 text-xs">
@@ -55,11 +101,13 @@ function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
             </span>
           )}
         </span>
-        <span className="truncate font-mono text-muted-foreground transition-colors duration-200 group-hover:text-foreground/80">
-          {sha ?? repoLabel(site.repo)}
-        </span>
+        {sha && (
+          <span className="font-mono text-muted-foreground transition-colors duration-200 group-hover:text-foreground/80">
+            {sha}
+          </span>
+        )}
       </div>
-    </Link>
+    </article>
   )
 }
 

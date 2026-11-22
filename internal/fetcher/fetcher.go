@@ -214,10 +214,10 @@ func moveTree(tmp, dir string) error {
 	return os.Remove(tmp)
 }
 
-// Fetch runs git fetch --prune origin in the repo at dir under the policy,
-// running git as runAs.
+// Fetch runs git fetch --prune --tags origin in the repo at dir under the
+// policy, running git as runAs.
 func (f *Fetcher) Fetch(ctx context.Context, dir, remoteURL, runAs string) (*Result, error) {
-	return f.run(ctx, dir, runAs, remoteURL, []string{"fetch", "--prune", "origin"})
+	return f.run(ctx, dir, runAs, remoteURL, []string{"fetch", "--prune", "--tags", "origin"})
 }
 
 // CheckoutLocal runs plain local git commands (no network) as runAs in dir.

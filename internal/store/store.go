@@ -24,8 +24,9 @@ const (
 
 // Trigger types.
 const (
-	TriggerPush   = "push"
-	TriggerManual = "manual"
+	TriggerPush    = "push"
+	TriggerRelease = "release"
+	TriggerManual  = "manual"
 )
 
 // Job is one queued/executed deployment.
@@ -135,6 +136,16 @@ func parseTime(s string) time.Time {
 // superseding older still-queued push jobs for the same site+branch.
 // It returns the new job and whether the delivery was new (false = duplicate).
 func (s *Store) EnqueuePush(site, deliveryID, branch, sha string) (Job, bool, error) {
+	return s.enqueueWebhook(site, TriggerPush, deliveryID, branch, sha)
+}
+
+// EnqueueRelease atomically dedups the webhook delivery and enqueues a release
+// job, superseding older still-queued release jobs for the same site+branch.
+func (s *Store) EnqueueRelease(site, deliveryID, branch, sha string) (Job, bool, error) {
+	return s.enqueueWebhook(site, TriggerRelease, deliveryID, branch, sha)
+}
+
+func (s *Store) enqueueWebhook(site, triggerType, deliveryID, branch, sha string) (Job, bool, error) {
 	ts := nowUTC()
 	var job Job
 	dup := false
@@ -151,7 +162,7 @@ func (s *Store) EnqueuePush(site, deliveryID, branch, sha string) (Job, bool, er
 		res, err := tx.Exec(
 			`INSERT INTO jobs (site, trigger_type, branch, sha, delivery_id, status, created_at)
 			 VALUES (?,?,?,?,?,?,?)`,
-			site, TriggerPush, branch, sha, deliveryID, StatusQueued, ts)
+			site, triggerType, branch, sha, deliveryID, StatusQueued, ts)
 		if err != nil {
 			return err
 		}
@@ -164,12 +175,12 @@ func (s *Store) EnqueuePush(site, deliveryID, branch, sha string) (Job, bool, er
 			site, deliveryID, id, ts); err != nil {
 			return err
 		}
-		// Supersede older queued push jobs for the same site+branch (never the new one,
-		// never running/finished jobs, never manual jobs).
+		// Supersede older queued jobs of the same trigger for this site+branch
+		// (never the new one, never running/finished/manual jobs).
 		if _, err := tx.Exec(
 			`UPDATE jobs SET status=?, finished_at=?, error=?
 			 WHERE site=? AND branch=? AND trigger_type=? AND status=? AND id<>?`,
-			StatusSuperseded, ts, "superseded by newer push", site, branch, TriggerPush, StatusQueued, id); err != nil {
+			StatusSuperseded, ts, "superseded by newer "+triggerType, site, branch, triggerType, StatusQueued, id); err != nil {
 			return err
 		}
 		return s.getJobTx(tx, id, &job)
