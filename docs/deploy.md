@@ -11,6 +11,7 @@
 | `DEPLOY_SITE` | 站点名 |
 | `DEPLOY_BRANCH` | 目标分支 |
 | `DEPLOY_COMMIT` | 实际检出的完整提交 SHA |
+| `DEPLOY_TRIGGER` | 触发来源（`push` / `release` / `manual`） |
 | `DEPLOY_JOB_ID` | 当前任务 ID |
 | `DEPLOY_FETCH_PROXY` | 配置的 `fetch.proxy` 地址（可能为空） |
 

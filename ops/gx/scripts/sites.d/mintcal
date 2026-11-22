@@ -1,0 +1,19 @@
+# mintcal — goke.xeed.ink. Runs as mintcal-ci, cwd = checked-out worktree
+# (DEPLOY_COMMIT). Pure static landing page from landing/; plain replace-all
+# rsync into /srv/mintcal (preserving /downloads/ mirrored release APKs).
+# On GitHub release webhooks (or manual deploys), also runs mintcal-sync-releases.
+site=mintcal
+dest=/srv/mintcal
+out=landing
+publish_excludes=(/downloads/)
+
+build() {
+	test -f landing/index.html || die "landing/index.html missing"
+}
+
+publish() {
+	publish_tree "${out:-dist}" "$dest"
+	if [ "${DEPLOY_TRIGGER:-}" = "release" ] || [ "${DEPLOY_TRIGGER:-}" = "manual" ]; then
+		/usr/local/bin/mintcal-sync-releases --force
+	fi
+}

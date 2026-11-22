@@ -1,0 +1,19 @@
+# Build / binary / DB / lockfiles
+/deployd
+/deployd.new
+deploy.db*
+state/
+go.sum
+web/node_modules/
+web/.next/
+web/out/
+web/pnpm-lock.yaml
+web/*.tsbuildinfo
+dist/
+build/
+*.log
+
+# Binary static assets
+web/public/*.ico
+web/public/*.png
+web/public/*.svg

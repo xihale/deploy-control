@@ -1,0 +1,60 @@
+# upix-web — upix.xeed.ink. Runs as upix-ci, cwd = checked-out worktree
+# (DEPLOY_COMMIT). Webhook triggers on stable web-vX.Y.Z tags via ref_regex.
+#   prepare: ensure Zig 0.17.0 in ~/.local/share/zvm/0.17.0 (fetch_file
+#   direct-then-proxy fallback + SHA256 verify on x86_64).
+#   build: npm ci + eslint + Zig WASM (SIMD + scalar) + Vite build +
+#   output assertions + precompressed gzip for Caddy `precompressed gzip`.
+#   publish: hashed /assets/ retire into ~/upix-web-attic for ~7 days;
+#   /wasm/ and shell files replace in place.
+site=upix-web
+dest=/srv/upix-web
+out=web/dist
+attic_trees=(assets)
+attic_dir=$HOME/upix-web-attic
+
+ZIG_VERSION="0.17.0"
+ZIG_SHA256="1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
+ZIG_DIR="$HOME/.local/share/zvm/$ZIG_VERSION"
+
+prepare() {
+	if [ ! -x "$ZIG_DIR/zig" ]; then
+		local arch zig_arch tmp
+		arch="$(uname -m)"
+		case "$arch" in
+			x86_64) zig_arch="x86_64-linux" ;;
+			aarch64) zig_arch="aarch64-linux" ;;
+			*) die "unsupported architecture for zig $ZIG_VERSION: $arch" ;;
+		esac
+		tmp="$(mktemp -d)"
+		if ! fetch_file "https://ziglang.org/download/${ZIG_VERSION}/zig-${zig_arch}-${ZIG_VERSION}.tar.xz" "$tmp/zig.tar.xz"; then
+			rm -rf "$tmp"
+			die "failed to download zig $ZIG_VERSION"
+		fi
+		if [ "$arch" = "x86_64" ] && ! echo "${ZIG_SHA256}  $tmp/zig.tar.xz" | sha256sum -c -; then
+			rm -rf "$tmp"
+			die "zig $ZIG_VERSION sha256 mismatch"
+		fi
+		mkdir -p "$ZIG_DIR"
+		tar -xf "$tmp/zig.tar.xz" -C "$ZIG_DIR" --strip-components=1
+		rm -rf "$tmp"
+	fi
+	export PATH="$ZIG_DIR:$PATH"
+	export ZIG="$ZIG_DIR/zig"
+	say "zig: $("$ZIG" version)"
+}
+
+build() {
+	(
+		cd web
+		npm ci --no-audit --no-fund
+		npm run lint
+		npm run build:wasm
+		npm run build
+	)
+	test -f web/dist/index.html || die "web/dist/index.html missing"
+	test -f web/dist/wasm/upix_wasm.wasm || die "web/dist/wasm/upix_wasm.wasm missing"
+	test -f web/dist/wasm/upix_wasm_scalar.wasm || die "web/dist/wasm/upix_wasm_scalar.wasm missing"
+	rm -f web/dist/CNAME
+	find web/dist -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.css' -o -name '*.svg' \) -size +1024c \
+		-exec gzip -9 -k -f {} +
+}

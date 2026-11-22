@@ -36,6 +36,7 @@
 
 ## 文档
 
+- [Cold-start 代码地图](CODEMAP.md)：模块索引、语义约束与常用命令速查。
 - [HTTP API 与 Webhook](docs/api.md)：认证、接口列表、任务状态与 Webhook 验签。
 - [前端开发与说明](docs/frontend.md)：静态导出、`DEV_API_ORIGIN` 本地代理联调与页面说明。
 - [站点脚本契约与生产部署](docs/deploy.md)：脚本环境变量、Git 拉取策略、`run_as` 隔离与 systemd 配置。

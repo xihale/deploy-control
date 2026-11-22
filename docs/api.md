@@ -12,12 +12,12 @@
 | --- | --- | --- |
 | `GET /healthz` | 公开 | 健康检查，返回 `{"status":"ok","queued":0,"running":0}` |
 | `GET /api/me` | `viewer` | 当前用户 `{"name":"alice","role":"admin"}` |
-| `GET /api/sites` | `viewer` | 已配置站点列表（含 `has_webhook_secret`、`run_as`） |
+| `GET /api/sites` | `viewer` | 已配置站点列表（含 `url`、`has_webhook_secret`、`run_as`、`ref_regex`、`events`） |
 | `GET /api/deploys` | `viewer` | 部署列表，支持 `?site=&status=&limit=20&offset=0` |
 | `POST /api/deploys` | `admin` | 创建手动部署，入队返回 `202` 与任务对象 |
 | `GET /api/deploys/{id}` | `viewer` | 单条任务详情 |
 | `GET /api/deploys/{id}/log` | `viewer` | 纯文本日志尾部，`?bytes=16384`（默认 16 KiB，最大 1 MiB） |
-| `POST /webhook/github/{site}` | HMAC 验签 | GitHub push Webhook |
+| `POST /webhook/github/{site}` | HMAC 验签 | GitHub Webhook（默认 `push`，可配置 `release`） |
 
 ## 手动部署
 
@@ -51,19 +51,20 @@
 }
 ```
 
-- **字段说明**：时间均为 UTC；无数据的可选字段省略。`sha` 为请求提交，`checked_sha` 为实际检出提交。`exit_code` 为 `-1` 表示异常终止（如超时或中断）。
+- **字段说明**：时间均为 UTC；无数据的可选字段省略。`trigger_type` 为 `push`、`release` 或 `manual`。`sha` 为请求提交，`checked_sha` 为实际检出提交。`exit_code` 为 `-1` 表示异常终止（如超时或中断）。
 - **状态说明**：
   - `queued`：排队中（同一站点串行执行，受 `global_concurrency` 限制）
   - `running`：执行中
   - `succeeded`：脚本退出码为 `0`（不独立证明外部线上流量已原子切换）
   - `failed`：执行失败、超时或服务异常重启中断
-  - `superseded`：同站点同分支排队任务被后续新 `push` 替代
+  - `superseded`：同站点同分支排队任务被后续同触发类型（`push` / `release`）新任务替代
 
 ## GitHub Webhook
 
 `POST /webhook/github/{site}` 校验站点 `webhook_secret` 与请求头：
 
 - `X-Hub-Signature-256`：HMAC-SHA256 验签，失败返回 `403`。
-- `X-GitHub-Event`：仅处理 `push`，其余事件（如 `ping`）返回 `200` 并忽略。
+- `X-GitHub-Event`：按站点 `events` 过滤（未配置时默认仅 `["push"]`）；未启用的事件及 `ping` 返回 `200` 并忽略。
 - `X-GitHub-Delivery`：按 `delivery_id` 去重，重复投递返回 `200` 且不重复入队。
-- 仅目标分支的普通推送会入队并返回 `202`；删除分支等无效提交直接返回 `200` 忽略。
+- `push` 事件：默认仅目标分支（`refs/heads/<branch>`）的普通推送会入队并返回 `202`；若站点配置了 `ref_regex`，则按该正则匹配完整 `ref`（如稳定版标签 `^refs/tags/web-v[0-9]+\.[0-9]+\.[0-9]+$`）。删除分支/标签等无效提交直接返回 `200` 忽略。
+- `release` 事件：需站点在 `events` 中启用 `release`；仅处理非草稿的 `published` / `released` / `prereleased` / `edited` / `deleted`（若配置了 `ref_regex` 还会校验 `refs/tags/<tag_name>`），在默认分支上创建 `trigger_type="release"` 任务并返回 `202`。

@@ -15,6 +15,8 @@
 | `me` | `me-ci` | `main` | SSH remote + Astro + attic |
 | `light-cathedral` | `lc-ci` | `main` | 源码树 rsync |
 | `sonny-boy` | `sonny-boy-ci` | `main` | SSH remote + Git LFS + 源码树 rsync |
+| `upix-web` | `upix-ci` | `main`（Webhook 匹配 `refs/tags/web-vX.Y.Z`） | Zig WASM + Vite + precompressed gzip + assets attic |
+| `mintcal` | `mintcal-ci` | `main`（`events: [push, release]`） | Goke（`goke.xeed.ink`）静态落地页 rsync；`release`/`manual` 同步执行 APK 镜像 |
 
 ## 迁移契约约束
 

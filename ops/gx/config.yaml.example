@@ -28,61 +28,87 @@ sites:
   - name: blog
     repo: https://github.com/xihale/blog
     branch: astro
+    url: https://xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <openssl rand -hex 20>
     run_as: blog-ci
   - name: zig-playground
     repo: https://github.com/xihale/zig-playground
     branch: master
+    url: https://zp.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: zig-ci
   - name: poetry
     repo: https://github.com/xihale/poetry
     branch: main
+    url: https://poetry.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: poetry-ci
   - name: schedmate
     repo: https://github.com/xihale/schedmate
     branch: main
+    url: https://sched.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: sched-ci
   - name: ziglings-web
     repo: https://github.com/xihale/ziglings-web
     branch: main
+    url: https://zlg.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: ziglings-ci
   - name: foyer
     repo: https://github.com/xihale/foyer
     branch: main
+    url: https://home.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: foyer-ci
   - name: me
     repo: git@github.com:xihale/me.git
     branch: main
+    url: https://me.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: me-ci
   - name: light-cathedral
     repo: https://github.com/xihale/light-cathedral.git
     branch: main
+    url: https://lc.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: lc-ci
   - name: sonny-boy
     repo: git@github.com:xihale/sonny-boy.git
     branch: main
+    url: https://sonny-boy.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: sonny-boy-ci
+  - name: upix-web
+    repo: https://github.com/xihale/upix.git
+    branch: main
+    url: https://upix.xeed.ink
+    ref_regex: ^refs/tags/web-v[0-9]+\.[0-9]+\.[0-9]+$
+    script: /var/lib/deployd/scripts/run-site
+    webhook_secret: <secret>
+    run_as: upix-ci
+  - name: mintcal
+    repo: https://github.com/xihale/goke
+    branch: main
+    url: https://goke.xeed.ink
+    events: [push, release]
+    script: /var/lib/deployd/scripts/run-site
+    webhook_secret: <secret>
+    run_as: mintcal-ci
   # deploy-control itself (self-bootstrap); no run_as: runs as the service
   # user (root) because it installs the binary and restarts the service.
   - name: deploy-control
     repo: https://github.com/xihale/deploy-control
     branch: main
+    url: https://deploy.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
