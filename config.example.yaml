@@ -32,7 +32,8 @@ users:
 
 # Sites. script must be an absolute, executable path (allowlist).
 # webhook_secret is the GitHub webhook secret for this site (HMAC-SHA256).
-# url (optional) is the live website URL displayed in the dashboard.
+# url (optional) is the live website URL displayed in the dashboard (its hostname is also used for analytics).
+# hosts (optional) lists additional hostnames mapped to this site for analytics.
 # ref_regex (optional) matches the full webhook `ref` (e.g. tags) instead of `refs/heads/<branch>`;
 # `branch` remains the default branch for manual deploys and release checkouts.
 # events (optional) lists allowed GitHub webhook events (`push`, `release`); defaults to `["push"]`.
@@ -42,8 +43,21 @@ sites:
     repo: https://github.com/example/blog.git
     branch: main
     url: https://blog.example.com
+    # hosts: [www.blog.example.com]
     # ref_regex: ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
     # events: [push, release]
     script: /usr/local/libexec/deploy-blog.sh
     webhook_secret: replace-with-a-long-random-secret
     # run_as: ciblog
+
+# Optional passive web analytics via Caddy JSON access logs.
+# analytics:
+#   enabled: true
+#   db_path: analytics.db           # defaults beside db_path
+#   caddy_logs:
+#     - /var/log/caddy/access.log   # supports file paths or globs
+#   timezone: Asia/Shanghai         # IANA timezone for DAU/hourly bucketing (default UTC)
+#   retention_days: 365
+#   ignore_bots: true
+#   exclude_paths: [/api/, /healthz]
+#   exclude_ips: [127.0.0.1]

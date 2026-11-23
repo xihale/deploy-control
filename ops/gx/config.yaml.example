@@ -16,6 +16,17 @@ fetch:
   # Attempt 1 always direct; HTTPS retries 2-5 via proxy; SSH remotes direct.
   proxy: http://127.0.0.1:7654
 
+analytics:
+  enabled: true
+  db_path: analytics.db
+  caddy_logs:
+    - /var/log/caddy/access.log
+  timezone: Asia/Shanghai
+  retention_days: 365
+  ignore_bots: true
+  exclude_paths: [/api/, /webhook/, /healthz]
+  exclude_ips: [127.0.0.1, ::1]
+
 users:
   - name: xihale
     token_hash: <sha256 of admin token>
@@ -29,6 +40,7 @@ sites:
     repo: https://github.com/xihale/blog
     branch: astro
     url: https://xeed.ink
+    hosts: [www.xeed.ink]
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <openssl rand -hex 20>
     run_as: blog-ci
@@ -64,6 +76,7 @@ sites:
     repo: https://github.com/xihale/foyer
     branch: main
     url: https://home.xeed.ink
+    hosts: [status.xeed.ink]
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: foyer-ci

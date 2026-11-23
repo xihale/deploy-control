@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"deploycontrol/internal/analytics"
 	"deploycontrol/internal/api"
 	"deploycontrol/internal/config"
 	"deploycontrol/internal/dispatch"
@@ -60,9 +61,18 @@ func main() {
 	r := &runner.Runner{Cfg: cfg, Fetch: f, LogDir: cfg.LogDirectory()}
 	disp := dispatch.New(cfg, st, r)
 
+	var analyticsStore *analytics.Store
+	if cfg.Analytics.Enabled {
+		analyticsStore, err = analytics.Open(cfg.AnalyticsDBFile())
+		if err != nil {
+			log.Fatalf("analytics store: %v", err)
+		}
+		defer analyticsStore.Close()
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/webhook/github/", &webhook.Handler{Cfg: cfg, Store: st, Disp: disp})
-	apiServer := &api.Server{Cfg: cfg, Store: st, Disp: disp, LogDir: cfg.LogDirectory()}
+	apiServer := &api.Server{Cfg: cfg, Store: st, Disp: disp, Analytics: analyticsStore, LogDir: cfg.LogDirectory()}
 	mux.Handle("/api/", apiServer)
 	mux.Handle("/healthz", apiServer)
 	webRoot := cfg.WebRoot()
@@ -85,10 +95,14 @@ func main() {
 	defer stop()
 
 	disp.Start(ctx)
+	if analyticsStore != nil {
+		ing := analytics.NewIngestor(cfg, analyticsStore, nil)
+		ing.Start(ctx)
+	}
 
 	go func() {
-		log.Printf("deployd listening on %s (global_concurrency=%d, sites=%d, fetch=%s, web=%s)",
-			cfg.ListenAddr(), cfg.GlobalConcurrency, len(cfg.Sites), f.DescribeRemote("https://x"), webRootOrAPI(webRoot))
+		log.Printf("deployd listening on %s (global_concurrency=%d, sites=%d, fetch=%s, web=%s, analytics=%v)",
+			cfg.ListenAddr(), cfg.GlobalConcurrency, len(cfg.Sites), f.DescribeRemote("https://x"), webRootOrAPI(webRoot), cfg.Analytics.Enabled)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)
 		}

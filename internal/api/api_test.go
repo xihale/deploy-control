@@ -1,15 +1,19 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"deploycontrol/internal/analytics"
 	"deploycontrol/internal/config"
 	"deploycontrol/internal/store"
 )
@@ -104,5 +108,87 @@ func TestSitesIncludesOptionalURL(t *testing.T) {
 	}
 	if _, ok := sites[1]["url"]; ok {
 		t.Fatalf("expected no url field for site without url, got %v", sites[1]["url"])
+	}
+}
+
+func TestAnalyticsEndpointsDisabledAndEnabled(t *testing.T) {
+	srv, token := newTestServer(t)
+
+	// Disabled state returns enabled=false with non-null arrays.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/analytics/overview?range=7d", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("disabled overview status %d body %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"series":null`) || strings.Contains(rec.Body.String(), `"sites":null`) {
+		t.Fatalf("arrays must not be null: %s", rec.Body.String())
+	}
+
+	// Enabled state with ingested Caddy log line.
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "access.log")
+	now := time.Now().UTC()
+	line := fmt.Sprintf(
+		`{"ts":%d,"duration":0.015,"size":4096,"status":200,"request":{"remote_ip":"198.51.100.7","method":"GET","host":"blog.example.com","uri":"/hello","headers":{"User-Agent":["Mozilla/5.0 Chrome/130.0.0.0 Safari/537.36"],"Referer":["https://github.com/"]}},"resp_headers":{"Content-Type":["text/html"]}}`+"\n",
+		now.Unix(),
+	)
+	if err := os.WriteFile(logPath, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgYAML := fmt.Sprintf(`
+db_path: %s
+users:
+  - name: admin
+    token_hash: %s
+    role: admin
+sites:
+  - name: blog
+    repo: https://github.com/example/blog
+    branch: main
+    url: https://blog.example.com
+    script: /bin/true
+analytics:
+  enabled: true
+  db_path: %s
+  caddy_logs: [%q]
+  timezone: UTC
+`, filepath.Join(dir, "deploy.db"), srv.Cfg.Users[0].TokenHash, filepath.Join(dir, "analytics.db"), logPath)
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ast, err := analytics.Open(cfg.AnalyticsDBFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ast.Close() })
+	ing := analytics.NewIngestor(cfg, ast, nil)
+	if err := ing.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	srv.Cfg = cfg
+	srv.Analytics = ast
+
+	for _, ep := range []string{
+		"/api/analytics/overview?range=7d",
+		"/api/analytics/sites/blog?range=7d",
+		"/api/analytics/dimensions?site=blog&dim=path&range=7d",
+		"/api/analytics/export?type=overview&range=7d",
+		"/api/analytics/export?type=daily&site=blog&range=7d",
+		"/api/analytics/export?type=dimension&site=blog&dim=path&range=7d",
+	} {
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodGet, ep, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		srv.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s returned %d: %s", ep, rec.Code, rec.Body.String())
+		}
 	}
 }

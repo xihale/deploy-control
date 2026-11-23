@@ -64,3 +64,23 @@ export function buildQuery(params: Record<string, string | number | undefined>) 
   const s = q.toString()
   return s ? `?${s}` : ''
 }
+
+export async function downloadFile(
+  path: string,
+  token: string | null,
+  fallbackFilename: string,
+) {
+  const res = await ensureOk(await send(path, token))
+  const blob = await res.blob()
+  const disp = res.headers.get('Content-Disposition') ?? ''
+  const match = disp.match(/filename="?([^"]+)"?/)
+  const filename = match?.[1] || fallbackFilename
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

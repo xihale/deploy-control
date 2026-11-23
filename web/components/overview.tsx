@@ -13,8 +13,9 @@ import { DeployRow } from '@/components/deploy-row'
 import { PulseStrip } from '@/components/pulse-strip'
 import { StatusDot } from '@/components/status-badge'
 import { ErrorState, PageSkeleton } from '@/components/states'
-import { useDeploys, useSites } from '@/hooks/use-api'
+import { useAnalyticsOverview, useDeploys, useSites } from '@/hooks/use-api'
 import {
+  formatNumber,
   repoLabel,
   repoUrl,
   safeHttpUrl,
@@ -24,9 +25,17 @@ import {
 } from '@/lib/format'
 import { STATUS, STATUS_ORDER } from '@/lib/status'
 import { cn } from '@/lib/utils'
-import type { DeployJob, DeployStatus, Site } from '@/lib/types'
+import type { AnalyticsSiteRow, DeployJob, DeployStatus, Site } from '@/lib/types'
 
-function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
+function SiteCard({
+  site,
+  jobs,
+  stat,
+}: {
+  site: Site
+  jobs: DeployJob[]
+  stat?: AnalyticsSiteRow
+}) {
   const latest = jobs[0]
   const meta = latest ? STATUS[latest.status] : null
   const sha = shortSha(latest?.checked_sha ?? latest?.sha)
@@ -107,6 +116,27 @@ function SiteCard({ site, jobs }: { site: Site; jobs: DeployJob[] }) {
           </span>
         )}
       </div>
+
+      {stat && (
+        <div className="flex items-center justify-between border-t pt-2.5 text-[11px] text-muted-foreground">
+          <span>
+            今日 DAU{' '}
+            <strong className="font-mono text-foreground tabular-nums">
+              {formatNumber(stat.today_dau)}
+            </strong>{' '}
+            · PV{' '}
+            <strong className="font-mono text-foreground tabular-nums">
+              {formatNumber(stat.today_pv)}
+            </strong>
+          </span>
+          <Link
+            href={`/analytics?site=${encodeURIComponent(site.name)}`}
+            className="relative z-10 hover:text-foreground transition-colors"
+          >
+            统计 →
+          </Link>
+        </div>
+      )}
     </article>
   )
 }
@@ -161,6 +191,15 @@ function HealthBar({
 export function Overview() {
   const sites = useSites()
   const deploys = useDeploys({ limit: 100 })
+  const analytics = useAnalyticsOverview({ range: '7d' })
+
+  const statBySite = useMemo(() => {
+    const map = new Map<string, AnalyticsSiteRow>()
+    if (analytics.data?.enabled) {
+      for (const s of analytics.data.sites) map.set(s.site, s)
+    }
+    return map
+  }, [analytics.data])
 
   const jobsBySite = useMemo(() => {
     const map = new Map<string, DeployJob[]>()
@@ -199,18 +238,41 @@ export function Overview() {
   return (
     <div className="space-y-8">
       <div className="space-y-5">
-        <h1 className="flex items-baseline gap-3 text-3xl font-semibold tracking-tight">
-          站点
-          <span className="font-mono text-xl font-normal text-muted-foreground tabular-nums">
-            {sites.data.length}
-          </span>
-        </h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="flex items-baseline gap-3 text-3xl font-semibold tracking-tight">
+            站点
+            <span className="font-mono text-xl font-normal text-muted-foreground tabular-nums">
+              {sites.data.length}
+            </span>
+          </h1>
+          {analytics.data?.enabled && (
+            <Link
+              href="/analytics"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              全站今日 DAU{' '}
+              <strong className="font-mono text-foreground tabular-nums">
+                {formatNumber(analytics.data.summary.today_dau)}
+              </strong>{' '}
+              · PV{' '}
+              <strong className="font-mono text-foreground tabular-nums">
+                {formatNumber(analytics.data.summary.today_pv)}
+              </strong>{' '}
+              · 查看综合统计 →
+            </Link>
+          )}
+        </div>
         <HealthBar sites={sites.data} latestBySite={latestBySite} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sites.data.map((site) => (
-          <SiteCard key={site.name} site={site} jobs={jobsBySite.get(site.name) ?? []} />
+          <SiteCard
+            key={site.name}
+            site={site}
+            jobs={jobsBySite.get(site.name) ?? []}
+            stat={statBySite.get(site.name)}
+          />
         ))}
       </div>
 

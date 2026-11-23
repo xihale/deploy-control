@@ -4,12 +4,14 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,6 +42,7 @@ type Site struct {
 	Script           string   `yaml:"script"`
 	WebhookSecret    string   `yaml:"webhook_secret"`
 	RunAs            string   `yaml:"run_as"` // optional unix user for CI isolation; empty = current user
+	Hosts            []string `yaml:"hosts"`  // optional extra hostnames mapped to this site for analytics
 	compiledRefRegex *regexp.Regexp
 }
 
@@ -49,18 +52,34 @@ type Fetch struct {
 	Proxy string `yaml:"proxy"`
 }
 
+// Analytics configures passive Caddy JSON access-log ingestion and web traffic reporting.
+type Analytics struct {
+	Enabled       bool     `yaml:"enabled"`
+	DBPath        string   `yaml:"db_path"`
+	CaddyLogs     []string `yaml:"caddy_logs"`
+	Timezone      string   `yaml:"timezone"`       // IANA timezone for daily/hourly bucketing; empty = UTC
+	RetentionDays int      `yaml:"retention_days"` // days to retain daily stats/visitors; <=0 defaults to 365
+	IgnoreBots    *bool    `yaml:"ignore_bots"`    // nil defaults to true
+	ExcludePaths  []string `yaml:"exclude_paths"`
+	ExcludeIPs    []string `yaml:"exclude_ips"`
+	resolvedDB    string
+	resolvedLogs  []string
+	location      *time.Location
+}
+
 // Config is the top-level deployd configuration.
 type Config struct {
-	Listen             string `yaml:"listen"`
-	DBPath             string `yaml:"db_path"`
-	StateDir           string `yaml:"state_dir"`
-	GlobalConcurrency  int    `yaml:"global_concurrency"`
-	DeployTimeoutSec   int    `yaml:"deploy_timeout_sec"`
-	LogDir             string `yaml:"log_dir"`
-	WebDir             string `yaml:"web_dir"` // static frontend export; empty = API only
-	Fetch              Fetch  `yaml:"fetch"`
-	Users              []User `yaml:"users"`
-	Sites              []Site `yaml:"sites"`
+	Listen             string    `yaml:"listen"`
+	DBPath             string    `yaml:"db_path"`
+	StateDir           string    `yaml:"state_dir"`
+	GlobalConcurrency  int       `yaml:"global_concurrency"`
+	DeployTimeoutSec   int       `yaml:"deploy_timeout_sec"`
+	LogDir             string    `yaml:"log_dir"`
+	WebDir             string    `yaml:"web_dir"` // static frontend export; empty = API only
+	Fetch              Fetch     `yaml:"fetch"`
+	Analytics          Analytics `yaml:"analytics"`
+	Users              []User    `yaml:"users"`
+	Sites              []Site    `yaml:"sites"`
 	listenHost         string
 	listenPort         string
 	resolvedDBPath     string
@@ -227,7 +246,77 @@ func (c *Config) validate(cfgPath string) error {
 			return fmt.Errorf("config: site %q script %q must be a clean absolute path", s.Name, s.Script)
 		}
 		c.resolvedScriptPath[s.Name] = resolved
+		if len(s.Hosts) > 0 {
+			cleanHosts := make([]string, 0, len(s.Hosts))
+			for _, h := range s.Hosts {
+				h = normalizeHost(h)
+				if h != "" && !slices.Contains(cleanHosts, h) {
+					cleanHosts = append(cleanHosts, h)
+				}
+			}
+			s.Hosts = cleanHosts
+		}
 	}
+
+	if err := c.validateAnalytics(base); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Config) validateAnalytics(base string) error {
+	a := &c.Analytics
+	a.resolvedDB = c.resolve(base, a.DBPath, filepath.Join(filepath.Dir(c.resolvedDBPath), "analytics.db"))
+	tz := strings.TrimSpace(a.Timezone)
+	if tz == "" {
+		tz = "UTC"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return fmt.Errorf("config: analytics.timezone %q: %w", tz, err)
+	}
+	a.Timezone = tz
+	a.location = loc
+
+	if a.RetentionDays < 0 {
+		return fmt.Errorf("config: analytics.retention_days must be >= 0")
+	}
+	if a.RetentionDays == 0 {
+		a.RetentionDays = 365
+	}
+
+	a.resolvedLogs = make([]string, 0, len(a.CaddyLogs))
+	for _, p := range a.CaddyLogs {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		a.resolvedLogs = append(a.resolvedLogs, c.resolve(base, p, ""))
+	}
+
+	cleanPaths := make([]string, 0, len(a.ExcludePaths))
+	for _, p := range a.ExcludePaths {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			cleanPaths = append(cleanPaths, p)
+		}
+	}
+	a.ExcludePaths = cleanPaths
+
+	cleanIPs := make([]string, 0, len(a.ExcludeIPs))
+	for _, raw := range a.ExcludeIPs {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if _, err := netip.ParsePrefix(raw); err != nil {
+			if _, err2 := netip.ParseAddr(raw); err2 != nil {
+				return fmt.Errorf("config: analytics.exclude_ips invalid IP/CIDR %q", raw)
+			}
+		}
+		cleanIPs = append(cleanIPs, raw)
+	}
+	a.ExcludeIPs = cleanIPs
 	return nil
 }
 
@@ -325,4 +414,56 @@ func (s Site) AllowsEvent(event string) bool {
 		return ev == "push"
 	}
 	return slices.Contains(s.Events, ev)
+}
+
+// AnalyticsHosts returns deduplicated lowercase hostnames (without port)
+// derived from Site.URL and Site.Hosts for analytics log matching.
+func (s Site) AnalyticsHosts() []string {
+	var out []string
+	if s.URL != "" {
+		if u, err := url.Parse(s.URL); err == nil {
+			if h := normalizeHost(u.Host); h != "" {
+				out = append(out, h)
+			}
+		}
+	}
+	for _, h := range s.Hosts {
+		if nh := normalizeHost(h); nh != "" && !slices.Contains(out, nh) {
+			out = append(out, nh)
+		}
+	}
+	return out
+}
+
+func normalizeHost(h string) string {
+	h = strings.ToLower(strings.TrimSpace(h))
+	if h == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		h = host
+	}
+	return strings.TrimSuffix(h, ".")
+}
+
+// AnalyticsDBFile returns the resolved analytics SQLite database path.
+func (c *Config) AnalyticsDBFile() string { return c.Analytics.resolvedDB }
+
+// AnalyticsLogPaths returns resolved Caddy access log paths/globs.
+func (c *Config) AnalyticsLogPaths() []string { return c.Analytics.resolvedLogs }
+
+// AnalyticsLocation returns the configured time.Location (defaults to UTC).
+func (c *Config) AnalyticsLocation() *time.Location {
+	if c.Analytics.location != nil {
+		return c.Analytics.location
+	}
+	return time.UTC
+}
+
+// ShouldIgnoreBots reports whether known crawler/bot user agents are excluded from PV/DAU.
+func (a Analytics) ShouldIgnoreBots() bool {
+	if a.IgnoreBots == nil {
+		return true
+	}
+	return *a.IgnoreBots
 }

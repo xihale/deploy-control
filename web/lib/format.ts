@@ -74,3 +74,26 @@ export function siteUrlLabel(raw: string): string {
   if (!raw) return ''
   return raw.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '')
 }
+
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let v = bytes
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v >= 100 || i === 0 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`
+}
+
+export function formatNumber(n: number): string {
+  if (!Number.isFinite(n)) return '0'
+  return new Intl.NumberFormat('zh-CN').format(n)
+}
+
+export function formatMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—'
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`
+  return `${ms.toFixed(1)} ms`
+}

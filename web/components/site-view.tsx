@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   ArrowLeftIcon,
+  BarChart3Icon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -21,8 +22,8 @@ import { ManualDeployDialog } from '@/components/manual-deploy-dialog'
 import { PulseStrip } from '@/components/pulse-strip'
 import { ErrorState } from '@/components/states'
 import { StatusDot } from '@/components/status-badge'
-import { useDeploys, useSites } from '@/hooks/use-api'
-import { repoLabel, repoUrl, safeHttpUrl, siteUrlLabel } from '@/lib/format'
+import { useAnalyticsSite, useDeploys, useSites } from '@/hooks/use-api'
+import { formatNumber, repoLabel, repoUrl, safeHttpUrl, siteUrlLabel } from '@/lib/format'
 import { STATUS, STATUS_ORDER } from '@/lib/status'
 import { cn } from '@/lib/utils'
 import type { DeployStatus, Site } from '@/lib/types'
@@ -119,6 +120,7 @@ export function SiteView() {
   const [page, setPage] = useState(0)
 
   const site = sites.data?.find((s) => s.name === name)
+  const analytics = useAnalyticsSite(site ? site.name : null, { range: '7d' })
   const recent = useDeploys({ site: name, limit: 16 })
   const list = useDeploys({
     site: name,
@@ -189,6 +191,47 @@ export function SiteView() {
       <div className="rounded-2xl border bg-card p-5">
         <PulseStrip jobs={recent.data?.jobs ?? []} slots={16} className="h-10 [&>span:last-child]:h-10 [&>span]:h-7" />
       </div>
+
+      {analytics.data?.enabled && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card px-5 py-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
+              <BarChart3Icon className="size-4 text-ok" />
+              访问概览
+            </span>
+            <span className="text-muted-foreground">
+              今日 DAU{' '}
+              <strong className="font-mono text-sm text-foreground tabular-nums">
+                {formatNumber(analytics.data.summary.today_dau)}
+              </strong>
+            </span>
+            <span className="text-muted-foreground">
+              今日 PV{' '}
+              <strong className="font-mono text-sm text-foreground tabular-nums">
+                {formatNumber(analytics.data.summary.today_pv)}
+              </strong>
+            </span>
+            <span className="text-muted-foreground">
+              7日 WAU{' '}
+              <strong className="font-mono text-sm text-foreground tabular-nums">
+                {formatNumber(analytics.data.summary.wau)}
+              </strong>
+            </span>
+            <span className="text-muted-foreground">
+              30日 MAU{' '}
+              <strong className="font-mono text-sm text-foreground tabular-nums">
+                {formatNumber(analytics.data.summary.mau)}
+              </strong>
+            </span>
+          </div>
+          <Link
+            href={`/analytics?site=${encodeURIComponent(name)}`}
+            className="text-xs font-medium text-foreground hover:underline underline-offset-4"
+          >
+            查看详细统计与数据表 →
+          </Link>
+        </div>
+      )}
 
       {site && <AccessPanel site={site} />}
 

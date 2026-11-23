@@ -197,6 +197,12 @@ export async function mockRequest(path: string, init?: RequestInit) {
     return json({ total: filtered.length, jobs: filtered.slice(offset, offset + limit) })
   }
 
+  if (p.startsWith('/api/analytics/')) {
+    const { mockAnalyticsRequest } = await import('./mock-analytics')
+    const res = mockAnalyticsRequest(SITES, url)
+    if (res) return res
+  }
+
   const m = p.match(/^\/api\/deploys\/(\d+)(\/log)?$/)
   if (m) {
     const job = jobs.find((j) => j.id === Number(m[1]))

@@ -1,0 +1,498 @@
+// Package analytics ingests Caddy JSON access logs and computes privacy-safe
+// web traffic metrics (DAU/WAU/MAU, PV, bandwidth, latency, and dimension tables).
+package analytics
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"net"
+	"net/netip"
+	"net/url"
+	"path"
+	"strings"
+	"time"
+
+	"deploycontrol/internal/config"
+)
+
+// Event is one classified, privacy-hashed access log entry.
+type Event struct {
+	Site        string
+	Day         string
+	Hour        string
+	UnixSec     int64
+	VisitorHash string
+	Path        string
+	Referrer    string
+	Browser     string
+	OS          string
+	Device      string
+	StatusCode  string
+	Status      int
+	Bytes       int64
+	DurationMS  float64
+	IsBot       bool
+	IsAsset     bool
+	IsPV        bool
+	BotOnly     bool
+}
+
+// Matcher maps Caddy access log entries onto configured sites and applies
+// exclusion and classification rules.
+type Matcher struct {
+	hostToSite   map[string]string
+	excludePaths []string
+	excludeAddrs []netip.Addr
+	excludeCIDRs []netip.Prefix
+	ignoreBots   bool
+	loc          *time.Location
+}
+
+// NewMatcher builds a Matcher from cfg.
+func NewMatcher(cfg *config.Config) *Matcher {
+	m := &Matcher{
+		hostToSite:   make(map[string]string),
+		excludePaths: append([]string(nil), cfg.Analytics.ExcludePaths...),
+		ignoreBots:   cfg.Analytics.ShouldIgnoreBots(),
+		loc:          cfg.AnalyticsLocation(),
+	}
+	for _, s := range cfg.Sites {
+		for _, h := range s.AnalyticsHosts() {
+			if _, exists := m.hostToSite[h]; !exists {
+				m.hostToSite[h] = s.Name
+			}
+		}
+	}
+	for _, raw := range cfg.Analytics.ExcludeIPs {
+		if p, err := netip.ParsePrefix(raw); err == nil {
+			m.excludeCIDRs = append(m.excludeCIDRs, p)
+		} else if a, err := netip.ParseAddr(raw); err == nil {
+			m.excludeAddrs = append(m.excludeAddrs, a)
+		}
+	}
+	return m
+}
+
+// SiteForHost resolves a request host to a configured site name.
+func (m *Matcher) SiteForHost(host string) (string, bool) {
+	h := normalizeHost(host)
+	site, ok := m.hostToSite[h]
+	return site, ok
+}
+
+func (m *Matcher) isExcludedIP(ipStr string) bool {
+	if ipStr == "" || (len(m.excludeAddrs) == 0 && len(m.excludeCIDRs) == 0) {
+		return false
+	}
+	addr, err := netip.ParseAddr(ipStr)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, a := range m.excludeAddrs {
+		if a.Unmap() == addr {
+			return true
+		}
+	}
+	for _, p := range m.excludeCIDRs {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Matcher) isExcludedPath(p string) bool {
+	for _, prefix := range m.excludePaths {
+		if strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+type caddyLogLine struct {
+	TS       json.RawMessage `json:"ts"`
+	Duration float64         `json:"duration"`
+	Size     int64           `json:"size"`
+	Status   int             `json:"status"`
+	Request  struct {
+		RemoteIP string              `json:"remote_ip"`
+		ClientIP string              `json:"client_ip"`
+		Method   string              `json:"method"`
+		Host     string              `json:"host"`
+		URI      string              `json:"uri"`
+		Headers  map[string][]string `json:"headers"`
+	} `json:"request"`
+	RespHeaders map[string][]string `json:"resp_headers"`
+}
+
+// ParseLine parses one Caddy JSON access log line. ok is false if the line is
+// malformed, does not match a configured site, or matches an exclusion rule.
+func (m *Matcher) ParseLine(line []byte, salt string) (Event, bool) {
+	trimmed := strings.TrimSpace(string(line))
+	if trimmed == "" || !strings.HasPrefix(trimmed, "{") {
+		return Event{}, false
+	}
+	var raw caddyLogLine
+	if err := json.Unmarshal([]byte(trimmed), &raw); err != nil {
+		return Event{}, false
+	}
+	if raw.Request.Host == "" && raw.Status == 0 {
+		return Event{}, false
+	}
+	site, ok := m.SiteForHost(raw.Request.Host)
+	if !ok {
+		return Event{}, false
+	}
+
+	ip := extractIP(raw.Request.ClientIP)
+	if ip == "" {
+		ip = extractIP(raw.Request.RemoteIP)
+	}
+	if m.isExcludedIP(ip) {
+		return Event{}, false
+	}
+
+	reqPath := normalizePath(raw.Request.URI)
+	if m.isExcludedPath(reqPath) {
+		return Event{}, false
+	}
+
+	ts, ok := parseCaddyTS(raw.TS)
+	if !ok {
+		ts = time.Now()
+	}
+	localTS := ts.In(m.loc)
+
+	ua := headerFirst(raw.Request.Headers, "User-Agent")
+	ref := m.normalizeReferrer(headerFirst(raw.Request.Headers, "Referer"), site, raw.Request.Host)
+	contentType := strings.ToLower(headerFirst(raw.RespHeaders, "Content-Type"))
+
+	isBot := detectBot(ua)
+	isAsset := detectAsset(reqPath, contentType)
+	method := strings.ToUpper(strings.TrimSpace(raw.Request.Method))
+	botOnly := isBot && m.ignoreBots
+
+	// PV counts human GET requests for non-asset, page-like resources returning 200/206/304.
+	isPV := !botOnly && method == "GET" && !isAsset && !isNonHTMLContentType(contentType) &&
+		(raw.Status == 200 || raw.Status == 206 || raw.Status == 304)
+
+	browser, osName, device := parseUserAgent(ua)
+	durMS := raw.Duration * 1000.0
+	if durMS < 0 {
+		durMS = 0
+	}
+	sizeBytes := raw.Size
+	if sizeBytes < 0 {
+		sizeBytes = 0
+	}
+
+	return Event{
+		Site:        site,
+		Day:         localTS.Format("2006-01-02"),
+		Hour:        localTS.Format("2006-01-02T15"),
+		UnixSec:     ts.Unix(),
+		VisitorHash: hashVisitor(salt, ip, ua),
+		Path:        reqPath,
+		Referrer:    ref,
+		Browser:     browser,
+		OS:          osName,
+		Device:      device,
+		StatusCode:  statusLabel(raw.Status),
+		Status:      raw.Status,
+		Bytes:       sizeBytes,
+		DurationMS:  durMS,
+		IsBot:       isBot,
+		IsAsset:     isAsset,
+		IsPV:        isPV,
+		BotOnly:     botOnly,
+	}, true
+}
+
+func parseCaddyTS(raw json.RawMessage) (time.Time, bool) {
+	if len(raw) == 0 {
+		return time.Time{}, false
+	}
+	var f float64
+	if err := json.Unmarshal(raw, &f); err == nil && f > 0 {
+		// Values > 1e12 are likely milliseconds; Caddy default is seconds float64.
+		if f > 1e12 {
+			f /= 1000.0
+		}
+		sec := int64(f)
+		nsec := int64((f - float64(sec)) * 1e9)
+		return time.Unix(sec, nsec).UTC(), true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil && s != "" {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05.999999999 -0700 MST", "2006/01/02 15:04:05"} {
+			if t, err := time.Parse(layout, s); err == nil {
+				return t.UTC(), true
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+func extractIP(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(s); err == nil {
+		s = host
+	}
+	if addr, err := netip.ParseAddr(s); err == nil {
+		return addr.Unmap().String()
+	}
+	return s
+}
+
+func normalizeHost(raw string) string {
+	h := strings.ToLower(strings.TrimSpace(raw))
+	if h == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		h = host
+	}
+	return strings.TrimSuffix(h, ".")
+}
+
+func normalizePath(uri string) string {
+	u := strings.TrimSpace(uri)
+	if u == "" {
+		return "/"
+	}
+	if idx := strings.IndexByte(u, '?'); idx >= 0 {
+		u = u[:idx]
+	}
+	if idx := strings.IndexByte(u, '#'); idx >= 0 {
+		u = u[:idx]
+	}
+	if u == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(u, "/") {
+		if parsed, err := url.Parse(u); err == nil && parsed.Path != "" {
+			u = parsed.Path
+		} else {
+			u = "/" + u
+		}
+	}
+	cleaned := path.Clean(u)
+	if cleaned == "." {
+		cleaned = "/"
+	}
+	// Preserve trailing slash for non-root paths if original had one so /blog and /blog/ match cleanly?
+	// Actually collapsing trailing slash (except "/") avoids duplicate rows for /about and /about/.
+	if len(cleaned) > 256 {
+		cleaned = cleaned[:256]
+	}
+	return cleaned
+}
+
+func (m *Matcher) normalizeReferrer(raw, site, siteHost string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "(direct)"
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "(direct)"
+	}
+	refHost := normalizeHost(u.Host)
+	if refHost == "" || refHost == normalizeHost(siteHost) {
+		return "(direct)"
+	}
+	if refSite, ok := m.SiteForHost(refHost); ok && refSite == site {
+		return "(direct)"
+	}
+	if len(refHost) > 128 {
+		refHost = refHost[:128]
+	}
+	return refHost
+}
+
+func headerFirst(headers map[string][]string, name string) string {
+	if len(headers) == 0 {
+		return ""
+	}
+	if vals, ok := headers[name]; ok && len(vals) > 0 {
+		return vals[0]
+	}
+	for k, vals := range headers {
+		if strings.EqualFold(k, name) && len(vals) > 0 {
+			return vals[0]
+		}
+	}
+	return ""
+}
+
+func hashVisitor(salt, ip, ua string) string {
+	h := sha256.New()
+	h.Write([]byte(salt))
+	h.Write([]byte("|"))
+	h.Write([]byte(ip))
+	h.Write([]byte("|"))
+	h.Write([]byte(ua))
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum[:16])
+}
+
+func statusLabel(code int) string {
+	if code <= 0 {
+		return "unknown"
+	}
+	// Avoid strconv import overhead for 3-digit codes.
+	return string([]byte{
+		byte('0' + (code/100)%10),
+		byte('0' + (code/10)%10),
+		byte('0' + code%10),
+	})
+}
+
+var botSubstrings = []string{
+	"bot", "crawler", "spider", "slurp", "mediapartners",
+	"curl/", "wget/", "python-requests", "python-urllib", "go-http-client",
+	"java/", "okhttp", "libwww-perl", "axios/", "node-fetch", "undici",
+	"headlesschrome", "lighthouse", "pagespeed", "pingdom", "uptimerobot",
+	"check_http", "monitoring", "nagios", "zabbix", "prometheus",
+	"facebookexternalhit", "twitterbot", "whatsapp", "telegrambot",
+	"slackbot", "discordbot", "linkedinbot", "embedly", "quora link preview",
+	"ahrefs", "semrush", "mj12bot", "dotbot", "petalbot", "bytespider",
+	"gptbot", "claudebot", "anthropic-ai", "ccbot", "yandex", "baiduspider",
+	"sogou", "360spider", "bingpreview", "applebot", "duckduckbot",
+	"zgrab", "masscan", "nuclei", "nikto", "sqlmap", "nmap",
+}
+
+func detectBot(ua string) bool {
+	if strings.TrimSpace(ua) == "" {
+		return true
+	}
+	l := strings.ToLower(ua)
+	for _, sub := range botSubstrings {
+		if strings.Contains(l, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+var assetExts = map[string]bool{
+	".css": true, ".js": true, ".mjs": true, ".cjs": true, ".map": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+	".avif": true, ".svg": true, ".ico": true, ".bmp": true,
+	".woff": true, ".woff2": true, ".ttf": true, ".otf": true, ".eot": true,
+	".wasm": true, ".mp4": true, ".webm": true, ".mp3": true, ".ogg": true,
+	".wav": true, ".zip": true, ".tar": true, ".gz": true, ".br": true,
+	".bz2": true, ".xz": true, ".7z": true, ".apk": true, ".ipa": true,
+	".webmanifest": true,
+}
+
+var assetPrefixes = []string{
+	"/_astro/", "/_nuxt/", "/_next/static/", "/_next/image",
+	"/assets/", "/static/", "/favicon",
+}
+
+var assetExactPaths = map[string]bool{
+	"/robots.txt":  true,
+	"/sitemap.xml": true,
+	"/sitemap-index.xml": true,
+	"/ads.txt":     true,
+	"/manifest.json": true,
+}
+
+func detectAsset(reqPath, contentType string) bool {
+	lp := strings.ToLower(reqPath)
+	if assetExactPaths[lp] {
+		return true
+	}
+	for _, p := range assetPrefixes {
+		if strings.HasPrefix(lp, p) {
+			return true
+		}
+	}
+	if ext := path.Ext(lp); ext != "" && assetExts[ext] {
+		return true
+	}
+	if contentType != "" {
+		if strings.HasPrefix(contentType, "image/") ||
+			strings.HasPrefix(contentType, "font/") ||
+			strings.HasPrefix(contentType, "audio/") ||
+			strings.HasPrefix(contentType, "video/") ||
+			strings.Contains(contentType, "text/css") ||
+			strings.Contains(contentType, "javascript") ||
+			strings.Contains(contentType, "application/wasm") {
+			return true
+		}
+	}
+	return false
+}
+
+// isNonHTMLContentType returns true when an explicit Content-Type header shows
+// the response is an API payload or feed rather than an HTML page. Empty
+// Content-Type (common on 304 Not Modified) returns false.
+func isNonHTMLContentType(contentType string) bool {
+	if contentType == "" {
+		return false
+	}
+	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/xhtml+xml") {
+		return false
+	}
+	return strings.Contains(contentType, "application/json") ||
+		strings.Contains(contentType, "application/xml") ||
+		strings.Contains(contentType, "text/xml") ||
+		strings.Contains(contentType, "application/rss") ||
+		strings.Contains(contentType, "application/atom") ||
+		strings.Contains(contentType, "application/octet-stream")
+}
+
+func parseUserAgent(ua string) (browser, osName, device string) {
+	if strings.TrimSpace(ua) == "" {
+		return "Other", "Other", "Desktop"
+	}
+	l := strings.ToLower(ua)
+
+	switch {
+	case strings.Contains(l, "edg/") || strings.Contains(l, "edge/") || strings.Contains(l, "edga/") || strings.Contains(l, "edgios/"):
+		browser = "Edge"
+	case strings.Contains(l, "opr/") || strings.Contains(l, "opera"):
+		browser = "Opera"
+	case strings.Contains(l, "firefox/") || strings.Contains(l, "fxios/"):
+		browser = "Firefox"
+	case strings.Contains(l, "chrome/") || strings.Contains(l, "crios/"):
+		browser = "Chrome"
+	case strings.Contains(l, "safari/"):
+		browser = "Safari"
+	default:
+		browser = "Other"
+	}
+
+	switch {
+	case strings.Contains(l, "iphone") || strings.Contains(l, "ipad") || strings.Contains(l, "ipod"):
+		osName = "iOS"
+	case strings.Contains(l, "android"):
+		osName = "Android"
+	case strings.Contains(l, "windows"):
+		osName = "Windows"
+	case strings.Contains(l, "mac os x") || strings.Contains(l, "macintosh"):
+		osName = "macOS"
+	case strings.Contains(l, "linux") || strings.Contains(l, "x11"):
+		osName = "Linux"
+	default:
+		osName = "Other"
+	}
+
+	switch {
+	case strings.Contains(l, "ipad") || strings.Contains(l, "tablet"):
+		device = "Tablet"
+	case strings.Contains(l, "mobile") || strings.Contains(l, "iphone") || strings.Contains(l, "ipod"):
+		device = "Mobile"
+	default:
+		device = "Desktop"
+	}
+	return browser, osName, device
+}

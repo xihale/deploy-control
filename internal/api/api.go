@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"deploycontrol/internal/analytics"
 	"deploycontrol/internal/config"
 	"deploycontrol/internal/dispatch"
 	"deploycontrol/internal/store"
@@ -21,10 +23,11 @@ import (
 
 // Server serves the REST API.
 type Server struct {
-	Cfg    *config.Config
-	Store  *store.Store
-	Disp   *dispatch.Dispatcher
-	LogDir string
+	Cfg       *config.Config
+	Store     *store.Store
+	Disp      *dispatch.Dispatcher
+	Analytics *analytics.Store
+	LogDir    string
 }
 
 type identity struct {
@@ -97,6 +100,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, "not found", http.StatusNotFound)
+	case path == "/api/analytics/overview":
+		s.handleAnalyticsOverview(w, r)
+	case path == "/api/analytics/dimensions":
+		s.handleAnalyticsDimensions(w, r)
+	case path == "/api/analytics/export":
+		s.handleAnalyticsExport(w, r)
+	case strings.HasPrefix(path, "/api/analytics/sites/"):
+		siteName := strings.TrimPrefix(path, "/api/analytics/sites/")
+		if siteName == "" || strings.Contains(siteName, "/") {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		s.handleAnalyticsSite(w, r, siteName)
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
@@ -140,6 +156,7 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 		Repo      string   `json:"repo"`
 		Branch    string   `json:"branch"`
 		URL       string   `json:"url,omitempty"`
+		Hosts     []string `json:"hosts,omitempty"`
 		RefRegex  string   `json:"ref_regex,omitempty"`
 		Events    []string `json:"events,omitempty"`
 		Script    string   `json:"script"`
@@ -153,6 +170,7 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			Repo:      site.Repo,
 			Branch:    site.Branch,
 			URL:       site.URL,
+			Hosts:     site.AnalyticsHosts(),
 			RefRegex:  site.RefRegex,
 			Events:    site.Events,
 			Script:    site.Script,
@@ -283,4 +301,226 @@ func (s *Server) handleManualDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Disp.Wake()
 	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (s *Server) analyticsEnabled() bool {
+	return s.Cfg != nil && s.Cfg.Analytics.Enabled && s.Analytics != nil
+}
+
+func (s *Server) resolveAnalyticsRange(r *http.Request) (analytics.DateRange, bool) {
+	q := r.URL.Query()
+	loc := s.Cfg.AnalyticsLocation()
+	dr, err := analytics.ResolveDateRange(q.Get("range"), q.Get("from"), q.Get("to"), loc, time.Now())
+	if err != nil {
+		return analytics.DateRange{}, false
+	}
+	return dr, true
+}
+
+func (s *Server) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireRole(w, r, config.RoleViewer); !ok {
+		return
+	}
+	q := r.URL.Query()
+	dr, err := analytics.ResolveDateRange(q.Get("range"), q.Get("from"), q.Get("to"), s.Cfg.AnalyticsLocation(), time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !s.analyticsEnabled() {
+		writeJSON(w, http.StatusOK, analytics.OverviewResponse{
+			Enabled:  false,
+			Timezone: s.Cfg.Analytics.Timezone,
+			Range:    dr,
+			Series:   []analytics.DailyPoint{},
+			Sites:    []analytics.SiteRow{},
+		})
+		return
+	}
+	rep, err := s.Analytics.QueryOverview(s.Cfg, dr, time.Now())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+func (s *Server) handleAnalyticsSite(w http.ResponseWriter, r *http.Request, siteName string) {
+	if _, ok := s.requireRole(w, r, config.RoleViewer); !ok {
+		return
+	}
+	site, ok := s.Cfg.SiteByName(siteName)
+	if !ok {
+		http.Error(w, "unknown site", http.StatusNotFound)
+		return
+	}
+	q := r.URL.Query()
+	dr, err := analytics.ResolveDateRange(q.Get("range"), q.Get("from"), q.Get("to"), s.Cfg.AnalyticsLocation(), time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !s.analyticsEnabled() {
+		hosts := site.AnalyticsHosts()
+		if hosts == nil {
+			hosts = []string{}
+		}
+		writeJSON(w, http.StatusOK, analytics.SiteReportResponse{
+			Enabled:  false,
+			Timezone: s.Cfg.Analytics.Timezone,
+			Site:     site.Name,
+			URL:      site.URL,
+			Hosts:    hosts,
+			Range:    dr,
+			Daily:    []analytics.DailyPoint{},
+			Hourly:   []analytics.HourlyPoint{},
+		})
+		return
+	}
+	rep, err := s.Analytics.QuerySiteReport(s.Cfg, site, dr, time.Now())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+func (s *Server) handleAnalyticsDimensions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireRole(w, r, config.RoleViewer); !ok {
+		return
+	}
+	q := r.URL.Query()
+	siteName := strings.TrimSpace(q.Get("site"))
+	if siteName == "" {
+		siteName = "_all"
+	}
+	if siteName != "_all" {
+		if _, ok := s.Cfg.SiteByName(siteName); !ok {
+			http.Error(w, "unknown site", http.StatusNotFound)
+			return
+		}
+	}
+	dim := strings.TrimSpace(q.Get("dim"))
+	if dim == "" {
+		dim = "path"
+	}
+	if !analytics.ValidDimension(dim) {
+		http.Error(w, "unsupported dim", http.StatusBadRequest)
+		return
+	}
+	dr, err := analytics.ResolveDateRange(q.Get("range"), q.Get("from"), q.Get("to"), s.Cfg.AnalyticsLocation(), time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !s.analyticsEnabled() {
+		writeJSON(w, http.StatusOK, analytics.DimensionResponse{
+			Enabled: false,
+			Site:    siteName,
+			Dim:     dim,
+			Range:   dr,
+			Rows:    []analytics.DimensionRow{},
+		})
+		return
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	rep, err := s.Analytics.QueryDimension(siteName, dim, dr, q.Get("q"), q.Get("sort"), q.Get("order"), limit, offset)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+func (s *Server) handleAnalyticsExport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireRole(w, r, config.RoleViewer); !ok {
+		return
+	}
+	if !s.analyticsEnabled() {
+		http.Error(w, "analytics disabled", http.StatusNotFound)
+		return
+	}
+	q := r.URL.Query()
+	dr, err := analytics.ResolveDateRange(q.Get("range"), q.Get("from"), q.Get("to"), s.Cfg.AnalyticsLocation(), time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	kind := strings.TrimSpace(q.Get("type"))
+	if kind == "" {
+		kind = "overview"
+	}
+	siteName := strings.TrimSpace(q.Get("site"))
+	if siteName == "" {
+		siteName = "_all"
+	}
+	if siteName != "_all" {
+		if _, ok := s.Cfg.SiteByName(siteName); !ok {
+			http.Error(w, "unknown site", http.StatusNotFound)
+			return
+		}
+	}
+
+	safeLabel := func(v string) string {
+		var b strings.Builder
+		for _, r := range v {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+				b.WriteRune(r)
+			}
+		}
+		if b.Len() == 0 {
+			return "all"
+		}
+		return b.String()
+	}
+
+	switch kind {
+	case "overview":
+		rep, err := s.Analytics.QueryOverview(s.Cfg, dr, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="analytics-overview-%s-to-%s.csv"`, dr.From, dr.To))
+		_ = analytics.WriteOverviewCSV(w, rep)
+	case "daily":
+		var rows []analytics.DailyPoint
+		if siteName == "_all" {
+			rep, err := s.Analytics.QueryOverview(s.Cfg, dr, time.Now())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			rows = rep.Series
+		} else {
+			site, _ := s.Cfg.SiteByName(siteName)
+			rep, err := s.Analytics.QuerySiteReport(s.Cfg, site, dr, time.Now())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			rows = rep.Daily
+		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="analytics-daily-%s-%s-to-%s.csv"`, safeLabel(siteName), dr.From, dr.To))
+		_ = analytics.WriteDailyCSV(w, rows)
+	case "dimension":
+		dim := strings.TrimSpace(q.Get("dim"))
+		if !analytics.ValidDimension(dim) {
+			http.Error(w, "unsupported dim", http.StatusBadRequest)
+			return
+		}
+		rep, err := s.Analytics.QueryDimension(siteName, dim, dr, q.Get("q"), q.Get("sort"), q.Get("order"), 500, 0)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="analytics-%s-%s-%s-to-%s.csv"`, safeLabel(siteName), dim, dr.From, dr.To))
+		_ = analytics.WriteDimensionCSV(w, rep)
+	default:
+		http.Error(w, "unsupported export type", http.StatusBadRequest)
+	}
 }

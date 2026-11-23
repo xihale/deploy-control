@@ -4,7 +4,18 @@ import useSWR from 'swr'
 import { useAuth } from '@/components/auth-provider'
 import { buildQuery, getJson, getText } from '@/lib/api'
 import { isActive } from '@/lib/status'
-import type { DeployJob, DeployList, DeployStatus, Health, Me, Site } from '@/lib/types'
+import type {
+  AnalyticsDimName,
+  AnalyticsDimension,
+  AnalyticsOverview,
+  AnalyticsSiteReport,
+  DeployJob,
+  DeployList,
+  DeployStatus,
+  Health,
+  Me,
+  Site,
+} from '@/lib/types'
 
 export function useMe() {
   const { token } = useAuth()
@@ -64,5 +75,56 @@ export function useHealth() {
     token ? ['/healthz', token] : null,
     ([p, t]) => getJson<Health>(p, t),
     { refreshInterval: 10000 },
+  )
+}
+
+export function useAnalyticsOverview(params: {
+  range?: string
+  from?: string
+  to?: string
+}) {
+  const { token } = useAuth()
+  const path = `/api/analytics/overview${buildQuery(params)}`
+  return useSWR(
+    token ? [path, token] : null,
+    ([p, t]) => getJson<AnalyticsOverview>(p, t),
+    { refreshInterval: 30000, keepPreviousData: true },
+  )
+}
+
+export function useAnalyticsSite(
+  site: string | null,
+  params: { range?: string; from?: string; to?: string },
+) {
+  const { token } = useAuth()
+  const path =
+    site && site !== '_all'
+      ? `/api/analytics/sites/${encodeURIComponent(site)}${buildQuery(params)}`
+      : null
+  return useSWR(
+    token && path ? [path, token] : null,
+    ([p, t]) => getJson<AnalyticsSiteReport>(p, t),
+    { refreshInterval: 30000, keepPreviousData: true },
+  )
+}
+
+export function useAnalyticsDimensions(params: {
+  site: string
+  dim: AnalyticsDimName
+  range?: string
+  from?: string
+  to?: string
+  q?: string
+  sort?: string
+  order?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}) {
+  const { token } = useAuth()
+  const path = `/api/analytics/dimensions${buildQuery(params)}`
+  return useSWR(
+    token ? [path, token] : null,
+    ([p, t]) => getJson<AnalyticsDimension>(p, t),
+    { keepPreviousData: true },
   )
 }

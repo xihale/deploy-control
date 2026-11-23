@@ -187,3 +187,54 @@ func TestSiteEventsValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyticsConfigAndSiteHosts(t *testing.T) {
+	dir := t.TempDir()
+	cfg := Config{
+		Users: []User{{Name: "admin", TokenHash: strings.Repeat("a", 64), Role: RoleAdmin}},
+		Sites: []Site{{
+			Name:   "blog",
+			Repo:   "/tmp/repo",
+			Branch: "main",
+			URL:    "https://xeed.ink",
+			Hosts:  []string{"www.xeed.ink:443", "xeed.ink"},
+			Script: "/tmp/deploy",
+		}},
+		Analytics: Analytics{
+			Enabled:    true,
+			CaddyLogs:  []string{"logs/access.log", "/var/log/caddy/*.log"},
+			Timezone:   "Asia/Shanghai",
+			ExcludeIPs: []string{"127.0.0.1", "10.0.0.0/8"},
+		},
+	}
+	if err := cfg.validate(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Fatalf("unexpected analytics config error: %v", err)
+	}
+	if got, want := cfg.AnalyticsDBFile(), filepath.Join(dir, "analytics.db"); got != want {
+		t.Fatalf("analytics db = %q, want %q", got, want)
+	}
+	if !cfg.Analytics.ShouldIgnoreBots() {
+		t.Fatalf("ignore_bots should default to true")
+	}
+	if got := cfg.Analytics.Timezone; got != "Asia/Shanghai" {
+		t.Fatalf("timezone = %q, want Asia/Shanghai", got)
+	}
+	if got := cfg.Sites[0].AnalyticsHosts(); len(got) != 2 || got[0] != "xeed.ink" || got[1] != "www.xeed.ink" {
+		t.Fatalf("unexpected analytics hosts: %v", got)
+	}
+	if got := cfg.AnalyticsLogPaths(); len(got) != 2 || got[0] != filepath.Join(dir, "logs", "access.log") || got[1] != "/var/log/caddy/*.log" {
+		t.Fatalf("unexpected log paths: %v", got)
+	}
+
+	badTZ := cfg
+	badTZ.Analytics.Timezone = "Invalid/Zone"
+	if err := badTZ.validate(filepath.Join(dir, "config.yaml")); err == nil {
+		t.Fatal("expected invalid timezone to fail")
+	}
+
+	badIP := cfg
+	badIP.Analytics.ExcludeIPs = []string{"not-an-ip"}
+	if err := badIP.validate(filepath.Join(dir, "config.yaml")); err == nil {
+		t.Fatal("expected invalid exclude_ips to fail")
+	}
+}

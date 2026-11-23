@@ -17,6 +17,10 @@
 | `POST /api/deploys` | `admin` | 创建手动部署，入队返回 `202` 与任务对象 |
 | `GET /api/deploys/{id}` | `viewer` | 单条任务详情 |
 | `GET /api/deploys/{id}/log` | `viewer` | 纯文本日志尾部，`?bytes=16384`（默认 16 KiB，最大 1 MiB） |
+| `GET /api/analytics/overview` | `viewer` | 全站综合访问统计（`?range=today|7d|30d|90d` 或 `?from=&to=`） |
+| `GET /api/analytics/sites/{site}` | `viewer` | 单站日活/PV/分时/按日明细统计 |
+| `GET /api/analytics/dimensions` | `viewer` | 维度明细表（`?site=_all|&lt;site&gt;&amp;dim=path|referrer|browser|os|device|status|error_path&amp;q=&amp;sort=&amp;order=&amp;limit=&amp;offset=`） |
+| `GET /api/analytics/export` | `viewer` | CSV 导出（`?type=overview|daily|dimension&amp;site=&amp;dim=`） |
 | `POST /webhook/github/{site}` | HMAC 验签 | GitHub Webhook（默认 `push`，可配置 `release`） |
 
 ## 手动部署
