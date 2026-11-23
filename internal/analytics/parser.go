@@ -374,6 +374,8 @@ var botRules = []botRule{
 	{"perplexitybot", "PerplexityBot (AI)"},
 	{"amazonbot", "Amazonbot (AI)"},
 	{"meta-externalagent", "Meta-ExternalAgent (AI)"},
+	{"meta-webindexer", "Meta-WebIndexer (AI)"},
+	{"elevenlabscrawler", "ElevenlabsCrawler (AI)"},
 	// Search engines
 	{"googlebot", "Googlebot (Search)"},
 	{"google-inspectiontool", "Google-Inspection (Search)"},
@@ -451,13 +453,17 @@ func classifyBot(ua string) (bool, string) {
 			return true, r.label
 		}
 	}
+	matched := false
 	for _, marker := range []string{"bot", "crawler", "spider"} {
 		if strings.Contains(l, marker) {
+			matched = true
 			if tok := extractBotToken(trimmed, marker); tok != "" {
 				return true, tok
 			}
-			return true, "Other Bot"
 		}
+	}
+	if matched {
+		return true, "Other Bot"
 	}
 	return false, ""
 }
@@ -467,7 +473,12 @@ func extractBotToken(ua, marker string) string {
 		return r == ' ' || r == ';' || r == '(' || r == ')' || r == ','
 	})
 	for _, f := range fields {
-		if strings.Contains(strings.ToLower(f), marker) {
+		lf := strings.ToLower(f)
+		if strings.HasPrefix(lf, "http://") || strings.HasPrefix(lf, "https://") ||
+			strings.HasPrefix(lf, "+http://") || strings.HasPrefix(lf, "+https://") {
+			continue
+		}
+		if strings.Contains(lf, marker) {
 			if slash := strings.IndexByte(f, '/'); slash > 0 {
 				f = f[:slash]
 			}

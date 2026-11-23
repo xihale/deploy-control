@@ -1,0 +1,22 @@
+# Reusable Caddy WAF / bot-shield snippet for edge (`g`) and origin (`gx`).
+# Blocks common exploit probe paths, vulnerability scanners, and aggressive AI/SEO bots.
+# Include `import bot_shield` inside site blocks (or on `g`'s `xeed.ink, *.xeed.ink` proxy).
+(bot_shield) {
+	@bad_path {
+		path /wp-admin* /wp-login* /wp-content* /wp-includes* /xmlrpc.php /.env /.env.* /.git* /.svn* /.hg* /.DS_Store /cgi-bin/* /phpmyadmin* /pma* /actuator*
+	}
+	@bad_php {
+		not {
+			host fresh.xeed.ink fresh.gx.xihale.top
+		}
+		path *.php
+	}
+	@bad_ua {
+		header_regexp User-Agent (?i)(nuclei|sqlmap|nikto|zgrab|masscan|nmap|dirbuster|gobuster|feroxbuster|wpscan|acunetix|nessus|openvas|fhscan|zmeu|libwww-perl|morfeus|python-httpx|semrushbot|ahrefsbot|mj12bot|dotbot|barkrowler|blexbot|dataforseobot|generalretrievalbot|elevenlabscrawler|bytespider|ccbot|gptbot|claudebot|anthropic-ai|perplexitybot|amazonbot|meta-externalagent|meta-webindexer)
+	}
+	route {
+		respond @bad_path 403
+		respond @bad_php 403
+		respond @bad_ua 403
+	}
+}

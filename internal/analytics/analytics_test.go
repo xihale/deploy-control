@@ -264,6 +264,12 @@ func TestIngestDeduplicatedDAUAndDimensionTables(t *testing.T) {
 	if isBot, name := classifyBot("Mozilla/5.0 (compatible; DataForSeoBot/1.0; +https://dataforseo.com/)"); !isBot || name != "DataForSeoBot" {
 		t.Fatalf("classifyBot custom token got (%v, %q), want (true, DataForSeoBot)", isBot, name)
 	}
+	if isBot, name := classifyBot("Mozilla/5.0 (compatible; CustomCrawler/1.0; +https://example.com/docs/bots)"); !isBot || name != "CustomCrawler" {
+		t.Fatalf("classifyBot URL-bot-skip got (%v, %q), want (true, CustomCrawler)", isBot, name)
+	}
+	if isBot, name := classifyBot("Mozilla/5.0 (compatible; ElevenlabsCrawler/1.0; +https://elevenlabs.io/docs/bots)"); !isBot || name != "ElevenlabsCrawler (AI)" {
+		t.Fatalf("classifyBot ElevenlabsCrawler got (%v, %q), want (true, ElevenlabsCrawler (AI))", isBot, name)
+	}
 
 	// CSV export sanity check.
 	var csvBuf bytes.Buffer
