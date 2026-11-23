@@ -159,6 +159,40 @@ analytics:
 		t.Fatal("expected BanManual on private IP 10.1.0.2 to fail")
 	}
 
+	// Verify extended honeypot paths (nested .env, sensitive .json, mixed-case .PhP7) vs legit .json paths.
+	m := NewMatcher(cfg)
+	for _, badPath := range []string{
+		"/app/.env",
+		"/core/.env.production",
+		"/.vscode/sftp.json",
+		"/package.json",
+		"/composer.json",
+		"/credentials.json",
+		"/secrets.json",
+		"/config.json",
+		"/swagger.json",
+		"/firebase-adminsdk.json",
+		"/actuator/env",
+		"/randkeyword.PhP7",
+		"/backup.sql.gz",
+	} {
+		if got := m.detectThreat("blog", badPath, uaChrome, ""); got != "honeypot" {
+			t.Fatalf("expected %q to be detected as honeypot, got %q", badPath, got)
+		}
+	}
+	for _, okPath := range []string{
+		"/downloads/latest.json",
+		"/deploy-meta.json",
+		"/compilers/0.16.0/meta.json",
+		"/vendor/ziglings/catalog.json",
+		"/manifest.json",
+		"/blog/adctf25-wp/",
+	} {
+		if got := m.detectThreat("blog", okPath, uaChrome, ""); got != "" {
+			t.Fatalf("expected legit path %q not to trigger threat, got %q", okPath, got)
+		}
+	}
+
 	// Manual ban + unban updates Caddy ban file.
 	if _, err := shield.BanManual(ctx, "203.0.113.120", "manual abuse", 24); err != nil {
 		t.Fatal(err)

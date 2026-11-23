@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -19,22 +20,10 @@ import (
 	"deploycontrol/internal/config"
 )
 
-var defaultHoneypotPrefixes = []string{
-	"/wp-admin",
-	"/wp-login",
-	"/wp-content",
-	"/wp-includes",
-	"/xmlrpc.php",
-	"/.env",
-	"/.git",
-	"/.svn",
-	"/.hg",
-	"/.ds_store",
-	"/cgi-bin/",
-	"/phpmyadmin",
-	"/pma",
-	"/actuator",
-}
+var (
+	honeypotPathRe = regexp.MustCompile(`(?i)((^|/)\.env([.~_-][^/]*)?$|(^|/)\.(git|svn|hg|bzr|ds_store|htaccess|htpasswd|ssh|aws|docker|kube|vscode|idea|npmrc|pypirc|netrc)(/|$)|(^|/)(wp-admin|wp-login|wp-content|wp-includes|wp-config|wordpress|xmlrpc\.php|wp-links-opml\.php|wp-access\.php|phpmyadmin|pma|adminer|cgi-bin|actuator|_profiler|_environment|server-status|server-info|phpinfo)(/|$|\.)|(^|/)(package\.json|package-lock\.json|composer\.json|composer\.lock|tsconfig\.json|jsconfig\.json|sftp\.json|config\.json|settings\.json|secrets?\.json|credentials?\.json|service[-_]?account\.json|google-services\.json|firebase[^/]*\.json|appsettings(\.[^/]+)?\.json|swagger\.json|openapi\.json|docker-compose\.ya?ml|dockerfile|config\.ya?ml|secrets?\.ya?ml|database\.ya?ml|id_rsa(\.pub)?|id_ed25519(\.pub)?|authorized_keys|web\.config)$|\.(sql|sqlite|sqlite3|bak|swp)(\.(gz|bz2|xz))?$)`)
+	honeypotPHPRe  = regexp.MustCompile(`(?i)\.php[0-9a-z]*(/|$)`)
+)
 
 var extraScannerTokens = []string{
 	"dirbuster",
@@ -52,17 +41,15 @@ var extraScannerTokens = []string{
 
 func (m *Matcher) detectThreat(site, reqPath, ua, botName string) string {
 	lp := strings.ToLower(reqPath)
-	for _, prefix := range defaultHoneypotPrefixes {
-		if strings.HasPrefix(lp, prefix) {
-			return "honeypot"
-		}
+	if honeypotPathRe.MatchString(reqPath) {
+		return "honeypot"
 	}
 	for _, custom := range m.extraHoneypot {
 		if strings.HasPrefix(lp, custom) {
 			return "honeypot"
 		}
 	}
-	if !m.excludePHPSites[site] && strings.HasSuffix(lp, ".php") {
+	if !m.excludePHPSites[site] && honeypotPHPRe.MatchString(reqPath) {
 		return "honeypot"
 	}
 

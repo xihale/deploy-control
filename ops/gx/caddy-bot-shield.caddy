@@ -4,13 +4,13 @@
 (bot_shield) {
 	import ip_bans
 	@honeypot_path {
-		path /wp-admin* /wp-login* /wp-content* /wp-includes* /xmlrpc.php /.env /.env.* /.git* /.svn* /.hg* /.DS_Store /cgi-bin/* /phpmyadmin* /pma* /actuator*
+		path_regexp (?i)((^|/)\.env([.~_-][^/]*)?$|(^|/)\.(git|svn|hg|bzr|ds_store|htaccess|htpasswd|ssh|aws|docker|kube|vscode|idea|npmrc|pypirc|netrc)(/|$)|(^|/)(wp-admin|wp-login|wp-content|wp-includes|wp-config|wordpress|xmlrpc\.php|wp-links-opml\.php|wp-access\.php|phpmyadmin|pma|adminer|cgi-bin|actuator|_profiler|_environment|server-status|server-info|phpinfo)(/|$|\.)|(^|/)(package\.json|package-lock\.json|composer\.json|composer\.lock|tsconfig\.json|jsconfig\.json|sftp\.json|config\.json|settings\.json|secrets?\.json|credentials?\.json|service[-_]?account\.json|google-services\.json|firebase[^/]*\.json|appsettings(\.[^/]+)?\.json|swagger\.json|openapi\.json|docker-compose\.ya?ml|dockerfile|config\.ya?ml|secrets?\.ya?ml|database\.ya?ml|id_rsa(\.pub)?|id_ed25519(\.pub)?|authorized_keys|web\.config)$|\.(sql|sqlite|sqlite3|bak|swp)(\.(gz|bz2|xz))?$)
 	}
 	@honeypot_php {
 		not {
 			host fresh.xeed.ink fresh.gx.xihale.top
 		}
-		path *.php
+		path_regexp (?i)\.php[0-9a-z]*(/|$)
 	}
 	@bad_ua {
 		header_regexp User-Agent (?i)(nuclei|sqlmap|nikto|zgrab|masscan|nmap|dirbuster|gobuster|feroxbuster|wpscan|acunetix|nessus|openvas|fhscan|zmeu|libwww-perl|morfeus|python-httpx|semrushbot|ahrefsbot|mj12bot|dotbot|barkrowler|blexbot|dataforseobot|generalretrievalbot|elevenlabscrawler|bytespider|ccbot|gptbot|claudebot|anthropic-ai|perplexitybot|amazonbot|meta-externalagent|meta-webindexer)
