@@ -33,6 +33,7 @@ type Event struct {
 	Bytes       int64
 	DurationMS  float64
 	IsBot       bool
+	BotName     string
 	IsAsset     bool
 	IsPV        bool
 	BotOnly     bool
@@ -170,7 +171,7 @@ func (m *Matcher) ParseLine(line []byte, salt string) (Event, bool) {
 	ref := m.normalizeReferrer(headerFirst(raw.Request.Headers, "Referer"), site, raw.Request.Host)
 	contentType := strings.ToLower(headerFirst(raw.RespHeaders, "Content-Type"))
 
-	isBot := detectBot(ua)
+	isBot, botName := classifyBot(ua)
 	isAsset := detectAsset(reqPath, contentType)
 	method := strings.ToUpper(strings.TrimSpace(raw.Request.Method))
 	botOnly := isBot && m.ignoreBots
@@ -205,6 +206,7 @@ func (m *Matcher) ParseLine(line []byte, salt string) (Event, bool) {
 		Bytes:       sizeBytes,
 		DurationMS:  durMS,
 		IsBot:       isBot,
+		BotName:     botName,
 		IsAsset:     isAsset,
 		IsPV:        isPV,
 		BotOnly:     botOnly,
@@ -354,31 +356,131 @@ func statusLabel(code int) string {
 	})
 }
 
-var botSubstrings = []string{
-	"bot", "crawler", "spider", "slurp", "mediapartners",
-	"curl/", "wget/", "python-requests", "python-urllib", "go-http-client",
-	"java/", "okhttp", "libwww-perl", "axios/", "node-fetch", "undici",
-	"headlesschrome", "lighthouse", "pagespeed", "pingdom", "uptimerobot",
-	"check_http", "monitoring", "nagios", "zabbix", "prometheus",
-	"facebookexternalhit", "twitterbot", "whatsapp", "telegrambot",
-	"slackbot", "discordbot", "linkedinbot", "embedly", "quora link preview",
-	"ahrefs", "semrush", "mj12bot", "dotbot", "petalbot", "bytespider",
-	"gptbot", "claudebot", "anthropic-ai", "ccbot", "yandex", "baiduspider",
-	"sogou", "360spider", "bingpreview", "applebot", "duckduckbot",
-	"zgrab", "masscan", "nuclei", "nikto", "sqlmap", "nmap",
+type botRule struct {
+	substr string
+	label  string
 }
 
-func detectBot(ua string) bool {
-	if strings.TrimSpace(ua) == "" {
-		return true
+var botRules = []botRule{
+	// AI crawlers
+	{"gptbot", "GPTBot (AI)"},
+	{"oai-searchbot", "OAI-SearchBot (AI)"},
+	{"chatgpt-user", "ChatGPT-User (AI)"},
+	{"claudebot", "ClaudeBot (AI)"},
+	{"anthropic-ai", "Anthropic-AI (AI)"},
+	{"claude-web", "Claude-Web (AI)"},
+	{"bytespider", "Bytespider (AI)"},
+	{"ccbot", "CCBot (AI)"},
+	{"perplexitybot", "PerplexityBot (AI)"},
+	{"amazonbot", "Amazonbot (AI)"},
+	{"meta-externalagent", "Meta-ExternalAgent (AI)"},
+	// Search engines
+	{"googlebot", "Googlebot (Search)"},
+	{"google-inspectiontool", "Google-Inspection (Search)"},
+	{"adsbot-google", "AdsBot-Google (Search)"},
+	{"mediapartners", "AdSense-Bot (Search)"},
+	{"bingbot", "Bingbot (Search)"},
+	{"bingpreview", "BingPreview (Search)"},
+	{"msnbot", "MSNBot (Search)"},
+	{"baiduspider", "Baiduspider (Search)"},
+	{"yandex", "YandexBot (Search)"},
+	{"duckduckbot", "DuckDuckBot (Search)"},
+	{"applebot", "Applebot (Search)"},
+	{"petalbot", "PetalBot (Search)"},
+	{"sogou", "SogouSpider (Search)"},
+	{"360spider", "360Spider (Search)"},
+	{"slurp", "Yahoo! Slurp (Search)"},
+	// SEO crawlers
+	{"ahrefs", "AhrefsBot (SEO)"},
+	{"semrush", "SemrushBot (SEO)"},
+	{"mj12bot", "MJ12bot (SEO)"},
+	{"dotbot", "DotBot (SEO)"},
+	{"barkrowler", "Barkrowler (SEO)"},
+	// Social / link previews
+	{"facebookexternalhit", "Facebook Preview"},
+	{"twitterbot", "Twitterbot (Preview)"},
+	{"telegrambot", "TelegramBot (Preview)"},
+	{"discordbot", "Discordbot (Preview)"},
+	{"slackbot", "Slackbot (Preview)"},
+	{"whatsapp", "WhatsApp (Preview)"},
+	{"linkedinbot", "LinkedInBot (Preview)"},
+	{"embedly", "Embedly (Preview)"},
+	{"quora link preview", "Quora Preview"},
+	// Monitoring & headless perf
+	{"uptimerobot", "UptimeRobot (Monitor)"},
+	{"pingdom", "Pingdom (Monitor)"},
+	{"lighthouse", "Lighthouse (Audit)"},
+	{"pagespeed", "PageSpeed (Audit)"},
+	{"headlesschrome", "HeadlessChrome"},
+	{"prometheus", "Prometheus (Monitor)"},
+	{"nagios", "Nagios (Monitor)"},
+	{"zabbix", "Zabbix (Monitor)"},
+	{"check_http", "check_http (Monitor)"},
+	{"monitoring", "Monitor Probe"},
+	// CLI / HTTP libraries
+	{"curl/", "curl (CLI)"},
+	{"wget/", "wget (CLI)"},
+	{"python-requests", "Python-Requests (HTTP)"},
+	{"python-urllib", "Python-Urllib (HTTP)"},
+	{"httpx", "HTTPX (HTTP)"},
+	{"aiohttp", "aiohttp (HTTP)"},
+	{"go-http-client", "Go-http-client (HTTP)"},
+	{"axios/", "Axios (HTTP)"},
+	{"node-fetch", "node-fetch (HTTP)"},
+	{"undici", "Undici (HTTP)"},
+	{"okhttp", "OkHttp (HTTP)"},
+	{"java/", "Java HTTP Client"},
+	{"libwww-perl", "libwww-perl (HTTP)"},
+	// Security scanners
+	{"nuclei", "Nuclei (Scanner)"},
+	{"nikto", "Nikto (Scanner)"},
+	{"sqlmap", "sqlmap (Scanner)"},
+	{"nmap", "Nmap (Scanner)"},
+	{"masscan", "Masscan (Scanner)"},
+	{"zgrab", "ZGrab (Scanner)"},
+}
+
+func classifyBot(ua string) (bool, string) {
+	trimmed := strings.TrimSpace(ua)
+	if trimmed == "" {
+		return true, "Empty UA"
 	}
-	l := strings.ToLower(ua)
-	for _, sub := range botSubstrings {
-		if strings.Contains(l, sub) {
-			return true
+	l := strings.ToLower(trimmed)
+	for _, r := range botRules {
+		if strings.Contains(l, r.substr) {
+			return true, r.label
 		}
 	}
-	return false
+	for _, marker := range []string{"bot", "crawler", "spider"} {
+		if strings.Contains(l, marker) {
+			if tok := extractBotToken(trimmed, marker); tok != "" {
+				return true, tok
+			}
+			return true, "Other Bot"
+		}
+	}
+	return false, ""
+}
+
+func extractBotToken(ua, marker string) string {
+	fields := strings.FieldsFunc(ua, func(r rune) bool {
+		return r == ' ' || r == ';' || r == '(' || r == ')' || r == ','
+	})
+	for _, f := range fields {
+		if strings.Contains(strings.ToLower(f), marker) {
+			if slash := strings.IndexByte(f, '/'); slash > 0 {
+				f = f[:slash]
+			}
+			f = strings.Trim(f, "+:;\"'")
+			if len(f) > 48 {
+				f = f[:48]
+			}
+			if f != "" {
+				return f
+			}
+		}
+	}
+	return ""
 }
 
 var assetExts = map[string]bool{

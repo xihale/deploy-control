@@ -348,19 +348,26 @@ func (s *Store) IngestBatch(events []Event, cursor *Cursor) error {
 			ds = &dailySiteAgg{}
 			dailySite[dsk] = ds
 		}
+		var e4, e5 int64
+		if ev.Status >= 400 && ev.Status < 500 {
+			e4 = 1
+		} else if ev.Status >= 500 {
+			e5 = 1
+		}
+		errInc := e4 + e5
+
+		if ev.IsBot && ev.BotName != "" {
+			addDim(ev.Day, ev.Site, "bot", ev.BotName, 0, 1, ev.Bytes, errInc, ev.DurationMS)
+			addDim(ev.Day, ev.Site, "bot_path", ev.Path, 0, 1, ev.Bytes, errInc, ev.DurationMS)
+		}
 		if ev.BotOnly {
 			ds.botHits++
 			continue
 		}
 
-		var pvInc, e4, e5 int64
+		var pvInc int64
 		if ev.IsPV {
 			pvInc = 1
-		}
-		if ev.Status >= 400 && ev.Status < 500 {
-			e4 = 1
-		} else if ev.Status >= 500 {
-			e5 = 1
 		}
 
 		ds.pv += pvInc
@@ -399,7 +406,6 @@ func (s *Store) IngestBatch(events []Event, cursor *Cursor) error {
 			}
 		}
 
-		errInc := e4 + e5
 		addDim(ev.Day, ev.Site, "status", ev.StatusCode, pvInc, 1, ev.Bytes, errInc, ev.DurationMS)
 		if errInc > 0 {
 			errKey := fmt.Sprintf("%d %s", ev.Status, ev.Path)
@@ -1037,7 +1043,7 @@ WHERE site = ? AND hour >= ? AND hour <= ?`, site, fromStr, toStr)
 // ValidDimension reports whether dim is a supported breakdown table dimension.
 func ValidDimension(dim string) bool {
 	switch dim {
-	case "path", "referrer", "browser", "os", "device", "status", "error_path":
+	case "path", "referrer", "browser", "os", "device", "status", "error_path", "bot", "bot_path":
 		return true
 	default:
 		return false
@@ -1073,7 +1079,7 @@ func (s *Store) QueryDimension(site, dim string, dr DateRange, search, sortBy, o
 	case "key":
 		sortExpr = "key"
 	default:
-		if dim == "status" || dim == "error_path" {
+		if dim == "status" || dim == "error_path" || dim == "bot" || dim == "bot_path" {
 			sortExpr = "req_sum"
 		}
 	}
@@ -1128,7 +1134,7 @@ LIMIT ? OFFSET ?`, where, sortExpr, dirExpr)
 	defer rows.Close()
 
 	denom := resp.TotalPV
-	if dim == "status" || dim == "error_path" || denom == 0 {
+	if dim == "status" || dim == "error_path" || dim == "bot" || dim == "bot_path" || denom == 0 {
 		denom = resp.TotalRequests
 	}
 
@@ -1140,7 +1146,7 @@ LIMIT ? OFFSET ?`, where, sortExpr, dirExpr)
 		r.AvgMS = round1(r.AvgMS)
 		if denom > 0 {
 			num := r.PV
-			if dim == "status" || dim == "error_path" || resp.TotalPV == 0 {
+			if dim == "status" || dim == "error_path" || dim == "bot" || dim == "bot_path" || resp.TotalPV == 0 {
 				num = r.Requests
 			}
 			r.Share = round2(float64(num) * 100.0 / float64(denom))

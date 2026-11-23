@@ -4,18 +4,35 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
+  ActivityIcon,
+  AlertTriangleIcon,
   ArrowDownIcon,
   ArrowUpDownIcon,
   ArrowUpIcon,
+  BotIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CompassIcon,
+  CpuIcon,
   DownloadIcon,
   ExternalLinkIcon,
+  EyeIcon,
+  FileTextIcon,
   GlobeIcon,
+  HardDriveIcon,
+  Link2Icon,
+  MonitorSmartphoneIcon,
   RefreshCwIcon,
+  RouteIcon,
   SearchIcon,
+  ShieldAlertIcon,
+  UsersIcon,
 } from 'lucide-react'
-import { DailyTrendChart, HourlyBarChart } from '@/components/analytics-charts'
+import {
+  BotBreakdownChart,
+  DailyTrendChart,
+  HourlyBarChart,
+} from '@/components/analytics-charts'
 import { useAuth } from '@/components/auth-provider'
 import { ErrorState, PageSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -44,14 +61,20 @@ const RANGES: { value: AnalyticsRangeName; label: string }[] = [
   { value: '90d', label: '近 90 天' },
 ]
 
-const DIMENSIONS: { value: AnalyticsDimName; label: string }[] = [
-  { value: 'path', label: '热门页面' },
-  { value: 'referrer', label: '访问来源' },
-  { value: 'browser', label: '浏览器' },
-  { value: 'os', label: '操作系统' },
-  { value: 'device', label: '设备类型' },
-  { value: 'status', label: '状态码' },
-  { value: 'error_path', label: '异常路径' },
+const DIMENSIONS: {
+  value: AnalyticsDimName
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}[] = [
+  { value: 'path', label: '热门页面', icon: FileTextIcon },
+  { value: 'referrer', label: '访问来源', icon: Link2Icon },
+  { value: 'browser', label: '浏览器', icon: CompassIcon },
+  { value: 'os', label: '操作系统', icon: CpuIcon },
+  { value: 'device', label: '设备类型', icon: MonitorSmartphoneIcon },
+  { value: 'status', label: '状态码', icon: ActivityIcon },
+  { value: 'error_path', label: '异常路径', icon: AlertTriangleIcon },
+  { value: 'bot', label: '爬虫 / Bot', icon: BotIcon },
+  { value: 'bot_path', label: 'Bot 抓取路径', icon: RouteIcon },
 ]
 
 const DIM_PAGE_SIZE = 20
@@ -78,8 +101,9 @@ function SummaryCards({ summary, isAll }: { summary: AnalyticsSummary; isAll: bo
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="text-xs text-muted-foreground">
-          {isAll ? '今日全站日活 (去重 DAU)' : '今日日活 (DAU)'}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{isAll ? '今日全站日活 (去重 DAU)' : '今日日活 (DAU)'}</span>
+          <UsersIcon className="size-3.5 text-ok" />
         </div>
         <div className="font-mono text-2xl font-semibold tabular-nums">
           {formatNumber(summary.today_dau)}
@@ -88,7 +112,10 @@ function SummaryCards({ summary, isAll }: { summary: AnalyticsSummary; isAll: bo
       </div>
 
       <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="text-xs text-muted-foreground">区间独立访客 (UV)</div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>区间独立访客 (UV)</span>
+          <UsersIcon className="size-3.5 opacity-60" />
+        </div>
         <div className="font-mono text-2xl font-semibold tabular-nums">
           {formatNumber(summary.range_uv)}
         </div>
@@ -98,7 +125,10 @@ function SummaryCards({ summary, isAll }: { summary: AnalyticsSummary; isAll: bo
       </div>
 
       <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="text-xs text-muted-foreground">区间浏览量 (PV)</div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>区间浏览量 (PV)</span>
+          <EyeIcon className="size-3.5 text-run" />
+        </div>
         <div className="font-mono text-2xl font-semibold tabular-nums">
           {formatNumber(summary.range_pv)}
         </div>
@@ -108,7 +138,10 @@ function SummaryCards({ summary, isAll }: { summary: AnalyticsSummary; isAll: bo
       </div>
 
       <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="text-xs text-muted-foreground">总请求与流量</div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>总请求与流量</span>
+          <HardDriveIcon className="size-3.5 text-wait" />
+        </div>
         <div className="font-mono text-2xl font-semibold tabular-nums">
           {formatBytes(summary.range_bytes)}
         </div>
@@ -118,7 +151,10 @@ function SummaryCards({ summary, isAll }: { summary: AnalyticsSummary; isAll: bo
       </div>
 
       <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="text-xs text-muted-foreground">深度访问与异常/爬虫</div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>深度访问与异常/爬虫</span>
+          <ShieldAlertIcon className="size-3.5 opacity-60" />
+        </div>
         <div className="font-mono text-2xl font-semibold tabular-nums">
           {summary.engaged_rate.toFixed(1)}%
         </div>
@@ -524,7 +560,11 @@ function DimensionBreakdownTable({
     setDim(next)
     setPage(0)
     setSearch('')
-    setSort(next === 'status' || next === 'error_path' ? 'requests' : 'pv')
+    setSort(
+      next === 'status' || next === 'error_path' || next === 'bot' || next === 'bot_path'
+        ? 'requests'
+        : 'pv',
+    )
     setOrder('desc')
   }
 
@@ -564,21 +604,25 @@ function DimensionBreakdownTable({
     <section className="rounded-2xl border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
         <div className="flex flex-wrap gap-1.5">
-          {DIMENSIONS.map((d) => (
-            <button
-              key={d.value}
-              type="button"
-              onClick={() => switchDim(d.value)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs transition-colors',
-                dim === d.value
-                  ? 'border-foreground bg-foreground text-background'
-                  : 'text-muted-foreground hover:border-foreground/30 hover:text-foreground',
-              )}
-            >
-              {d.label}
-            </button>
-          ))}
+          {DIMENSIONS.map((d) => {
+            const Icon = d.icon
+            return (
+              <button
+                key={d.value}
+                type="button"
+                onClick={() => switchDim(d.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors',
+                  dim === d.value
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'text-muted-foreground hover:border-foreground/30 hover:text-foreground',
+                )}
+              >
+                <Icon className="size-3.5" />
+                {d.label}
+              </button>
+            )
+          })}
         </div>
 
         <div className="flex items-center gap-2">
@@ -805,6 +849,15 @@ export function AnalyticsView() {
 
   const isAll = activeSite === '_all'
   const activeQuery = isAll ? overview : siteReport
+  const botSummary = useAnalyticsDimensions({
+    site: activeSite,
+    dim: 'bot',
+    ...rangeQuery,
+    sort: 'requests',
+    order: 'desc',
+    limit: 8,
+    offset: 0,
+  })
 
   if (sites.error) return <ErrorState error={sites.error} onRetry={() => sites.mutate()} />
   if (activeQuery.error) {
@@ -973,6 +1026,13 @@ export function AnalyticsView() {
               )
             }
           />
+
+          {(summary?.bot_hits ?? 0) > 0 && (botSummary.data?.rows.length ?? 0) > 0 && (
+            <BotBreakdownChart
+              rows={botSummary.data?.rows ?? []}
+              totalBotHits={summary?.bot_hits ?? 0}
+            />
+          )}
 
           <DimensionBreakdownTable
             site={activeSite}

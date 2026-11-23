@@ -250,7 +250,8 @@ export function mockAnalyticsRequest(sites: Site[], url: URL): Response | null {
     const site = url.searchParams.get('site') || '_all'
     const dim = (url.searchParams.get('dim') || 'path') as AnalyticsDimName
     const q = (url.searchParams.get('q') || '').trim().toLowerCase()
-    const sortBy = url.searchParams.get('sort') || (dim === 'status' || dim === 'error_path' ? 'requests' : 'pv')
+    const reqOnlyDim = dim === 'status' || dim === 'error_path' || dim === 'bot' || dim === 'bot_path'
+    const sortBy = url.searchParams.get('sort') || (reqOnlyDim ? 'requests' : 'pv')
     const order = url.searchParams.get('order') || 'desc'
     const limit = Number(url.searchParams.get('limit') || 50)
     const offset = Number(url.searchParams.get('offset') || 0)
@@ -264,20 +265,22 @@ export function mockAnalyticsRequest(sites: Site[], url: URL): Response | null {
       device: ['Desktop', 'Mobile', 'Tablet'],
       status: ['200', '304', '301', '404', '206', '502'],
       error_path: ['404 /wp-login.php', '404 /favicon.png', '404 /posts/old-slug', '404 /.env', '502 /api/preview'],
+      bot: ['Googlebot (Search)', 'GPTBot (AI)', 'Bytespider (AI)', 'curl (CLI)', 'Bingbot (Search)', 'ClaudeBot (AI)', 'UptimeRobot (Monitor)', 'Empty UA'],
+      bot_path: ['/robots.txt', '/sitemap.xml', '/', '/posts/zig-wasm-notes', '/wp-login.php', '/.env', '/feed.xml'],
     }
     const keys = presets[dim] ?? presets.path
     let rows: AnalyticsDimensionRow[] = keys.map((key, idx) => {
       const base = Math.max(1, Math.round((160 / (idx + 1.2)) * Math.max(0.6, scale)))
       const isErr = dim === 'error_path' || (dim === 'status' && Number(key) >= 400)
-      const pv = isErr || key === '301' ? 0 : base
-      const requests = isErr ? base : Math.round(base * (key === '200' ? 4.2 : 1.15))
+      const pv = isErr || reqOnlyDim || key === '301' ? 0 : base
+      const requests = isErr || reqOnlyDim ? base : Math.round(base * (key === '200' ? 4.2 : 1.15))
       const bytes = requests * (key === '200' || key === '/' ? 19400 : 8200)
       return {
         key,
         pv,
         requests,
         bytes,
-        err_count: isErr ? requests : 0,
+        err_count: isErr ? requests : dim === 'bot_path' && key.includes('.env') ? requests : 0,
         avg_ms: Number((4.2 + idx * 1.7).toFixed(1)),
         share: 0,
       }
@@ -287,10 +290,10 @@ export function mockAnalyticsRequest(sites: Site[], url: URL): Response | null {
     const total_pv = rows.reduce((a, b) => a + b.pv, 0)
     const total_requests = rows.reduce((a, b) => a + b.requests, 0)
     const total_bytes = rows.reduce((a, b) => a + b.bytes, 0)
-    const denom = dim === 'status' || dim === 'error_path' || total_pv === 0 ? total_requests : total_pv
+    const denom = reqOnlyDim || total_pv === 0 ? total_requests : total_pv
     rows = rows.map((r) => ({
       ...r,
-      share: denom > 0 ? Number((((dim === 'status' || dim === 'error_path' || total_pv === 0 ? r.requests : r.pv) * 100) / denom).toFixed(2)) : 0,
+      share: denom > 0 ? Number((((reqOnlyDim || total_pv === 0 ? r.requests : r.pv) * 100) / denom).toFixed(2)) : 0,
     }))
 
     rows.sort((a, b) => {

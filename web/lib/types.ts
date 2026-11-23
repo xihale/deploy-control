@@ -61,6 +61,8 @@ export type AnalyticsDimName =
   | 'device'
   | 'status'
   | 'error_path'
+  | 'bot'
+  | 'bot_path'
 
 export interface AnalyticsDateRange {
   from: string

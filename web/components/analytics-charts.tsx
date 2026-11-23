@@ -1,95 +1,131 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { formatBytes, formatNumber } from '@/lib/format'
-import type { AnalyticsDailyPoint, AnalyticsHourlyPoint } from '@/lib/types'
+import type {
+  AnalyticsDailyPoint,
+  AnalyticsDimensionRow,
+  AnalyticsHourlyPoint,
+} from '@/lib/types'
+
+function DailyTooltip({
+  active,
+  payload,
+  mode,
+}: {
+  active?: boolean
+  payload?: Array<{ payload: AnalyticsDailyPoint }>
+  mode: 'traffic' | 'requests'
+}) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="rounded-xl border bg-popover/95 px-3 py-2 text-xs text-popover-foreground shadow-md backdrop-blur-sm">
+      <div className="mb-1.5 font-mono font-semibold">{d.day}</div>
+      <div className="space-y-1 font-mono tabular-nums">
+        {mode === 'traffic' ? (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="size-2 rounded-full bg-ok" />
+                日活 (DAU)
+              </span>
+              <span className="font-semibold text-foreground">{formatNumber(d.dau)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="size-2 rounded-xs bg-run" />
+                浏览量 (PV)
+              </span>
+              <span className="font-semibold text-foreground">{formatNumber(d.pv)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-muted-foreground">
+              <span>总请求 / Bot</span>
+              <span>
+                {formatNumber(d.requests)} / {formatNumber(d.bot_hits)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="size-2 rounded-xs bg-run" />
+                总请求
+              </span>
+              <span className="font-semibold text-foreground">{formatNumber(d.requests)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="size-2 rounded-full bg-wait" />
+                流量
+              </span>
+              <span className="font-semibold text-foreground">{formatBytes(d.bytes)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-muted-foreground">
+              <span>4xx / 5xx</span>
+              <span>
+                {d.err_4xx} / {d.err_5xx}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const [mode, setMode] = useState<'traffic' | 'requests'>('traffic')
 
   if (series.length === 0) {
     return (
-      <div className="flex h-56 items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">
+      <div className="flex h-64 items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">
         暂无趋势数据
       </div>
     )
   }
 
-  const width = 760
-  const height = 220
-  const padL = 44
-  const padR = 44
-  const padT = 18
-  const padB = 28
-  const plotW = width - padL - padR
-  const plotH = height - padT - padB
-
-  const maxPrimary = Math.max(
-    1,
-    ...series.map((d) => (mode === 'traffic' ? d.pv : d.requests)),
-  )
-  const maxSecondary = Math.max(
-    1,
-    ...series.map((d) => (mode === 'traffic' ? d.dau : d.bytes)),
-  )
-
-  const n = series.length
-  const slotW = plotW / n
-  const barW = Math.max(3, Math.min(26, slotW * 0.56))
-
-  const xCenter = (i: number) => padL + (i + 0.5) * slotW
-  const yPrimary = (v: number) => padT + plotH - (v / maxPrimary) * plotH
-  const ySecondary = (v: number) => padT + plotH - (v / maxSecondary) * plotH
-
-  const linePoints = series
-    .map((d, i) => {
-      const val = mode === 'traffic' ? d.dau : d.bytes
-      return `${xCenter(i).toFixed(1)},${ySecondary(val).toFixed(1)}`
-    })
-    .join(' ')
-
-  const active = hoverIdx !== null ? series[hoverIdx] : series[series.length - 1]
-  const labelStep = Math.max(1, Math.ceil(n / 7))
-
   return (
     <section className="rounded-2xl border bg-card p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="font-mono font-medium text-foreground">
-              {active.day}
-            </span>
-            {mode === 'traffic' ? (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-ok" />
-                  日活 <strong className="font-mono text-foreground">{formatNumber(active.dau)}</strong>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-sm bg-run/70" />
-                  PV <strong className="font-mono text-foreground">{formatNumber(active.pv)}</strong>
-                </span>
-                <span>
-                  请求 <strong className="font-mono text-foreground">{formatNumber(active.requests)}</strong>
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-sm bg-run/70" />
-                  请求 <strong className="font-mono text-foreground">{formatNumber(active.requests)}</strong>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-wait" />
-                  流量 <strong className="font-mono text-foreground">{formatBytes(active.bytes)}</strong>
-                </span>
-                <span>
-                  4xx/5xx <strong className="font-mono text-foreground">{active.err_4xx}/{active.err_5xx}</strong>
-                </span>
-              </>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <span className="text-sm font-semibold text-foreground">访问趋势</span>
+          {mode === 'traffic' ? (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-ok" />
+                日活 (DAU)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-xs bg-run/70" />
+                浏览量 (PV)
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-xs bg-run/70" />
+                总请求
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-wait" />
+                流量 (Bytes)
+              </span>
+            </>
+          )}
         </div>
 
         <div className="flex rounded-full border bg-muted/50 p-0.5 text-xs">
@@ -118,215 +154,237 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
         </div>
       </div>
 
-      <div className="relative w-full overflow-hidden">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="h-52 w-full select-none"
-          onMouseLeave={() => setHoverIdx(null)}
-        >
-          {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-            const y = padT + plotH * (1 - t)
-            const leftLabel = Math.round(maxPrimary * t)
-            const rightLabel =
-              mode === 'traffic'
-                ? formatNumber(Math.round(maxSecondary * t))
-                : formatBytes(Math.round(maxSecondary * t))
-            return (
-              <g key={t}>
-                <line
-                  x1={padL}
-                  y1={y}
-                  x2={width - padR}
-                  y2={y}
-                  stroke="currentColor"
-                  strokeOpacity={0.08}
-                  strokeDasharray={t > 0 && t < 1 ? '3 3' : undefined}
-                />
-                <text
-                  x={padL - 6}
-                  y={y + 3}
-                  textAnchor="end"
-                  className="fill-muted-foreground font-mono text-[10px]"
-                >
-                  {leftLabel}
-                </text>
-                <text
-                  x={width - padR + 6}
-                  y={y + 3}
-                  textAnchor="start"
-                  className="fill-muted-foreground font-mono text-[10px]"
-                >
-                  {rightLabel}
-                </text>
-              </g>
-            )
-          })}
-
-          {series.map((d, i) => {
-            const pVal = mode === 'traffic' ? d.pv : d.requests
-            const y = yPrimary(pVal)
-            const h = Math.max(1, padT + plotH - y)
-            const isHover = hoverIdx === i
-            return (
-              <g key={d.day}>
-                <rect
-                  x={xCenter(i) - barW / 2}
-                  y={y}
-                  width={barW}
-                  height={h}
-                  rx={Math.min(3, barW / 2)}
-                  fill="var(--run)"
-                  fillOpacity={isHover ? 0.52 : 0.24}
-                />
-                <rect
-                  x={padL + i * slotW}
-                  y={padT}
-                  width={slotW}
-                  height={plotH}
-                  fill="transparent"
-                  onMouseEnter={() => setHoverIdx(i)}
-                />
-                {(i % labelStep === 0 || i === n - 1) && (
-                  <text
-                    x={xCenter(i)}
-                    y={height - 8}
-                    textAnchor="middle"
-                    className="fill-muted-foreground font-mono text-[10px]"
-                  >
-                    {d.day.slice(5)}
-                  </text>
-                )}
-              </g>
-            )
-          })}
-
-          {n > 1 && (
-            <polyline
-              fill="none"
-              stroke={mode === 'traffic' ? 'var(--ok)' : 'var(--wait)'}
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              points={linePoints}
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ComposedChart
+            data={series}
+            margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+          >
+            <CartesianGrid
+              stroke="var(--border)"
+              strokeDasharray="3 3"
+              vertical={false}
             />
-          )}
-
-          {series.map((d, i) => {
-            const val = mode === 'traffic' ? d.dau : d.bytes
-            const isHover = hoverIdx === i
-            return (
-              <circle
-                key={`pt-${d.day}`}
-                cx={xCenter(i)}
-                cy={ySecondary(val)}
-                r={isHover ? 4.5 : n <= 31 ? 2.5 : 1.5}
-                fill={mode === 'traffic' ? 'var(--ok)' : 'var(--wait)'}
-                className="pointer-events-none"
-              />
-            )
-          })}
-        </svg>
+            <XAxis
+              dataKey="day"
+              tickFormatter={(v: string) => v.slice(5)}
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+              minTickGap={24}
+            />
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tickFormatter={(v: number) =>
+                mode === 'traffic' ? formatNumber(v) : formatBytes(v)
+              }
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+              width={mode === 'traffic' ? 42 : 58}
+              allowDecimals={false}
+            />
+            <Tooltip
+              cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }}
+              content={<DailyTooltip mode={mode} />}
+            />
+            <Bar
+              yAxisId="left"
+              dataKey={mode === 'traffic' ? 'pv' : 'requests'}
+              fill="var(--run)"
+              fillOpacity={0.35}
+              radius={[4, 4, 0, 0]}
+              maxBarSize={28}
+            />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey={mode === 'traffic' ? 'dau' : 'bytes'}
+              stroke={mode === 'traffic' ? 'var(--ok)' : 'var(--wait)'}
+              strokeWidth={2.2}
+              dot={series.length <= 31 ? { r: 2.5, strokeWidth: 0, fill: mode === 'traffic' ? 'var(--ok)' : 'var(--wait)' } : false}
+              activeDot={{ r: 4.5 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
     </section>
   )
 }
 
+function HourlyTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload: AnalyticsHourlyPoint }>
+}) {
+  if (!active || !payload?.length) return null
+  const h = payload[0].payload
+  return (
+    <div className="rounded-xl border bg-popover/95 px-3 py-2 text-xs text-popover-foreground shadow-md backdrop-blur-sm">
+      <div className="mb-1 font-mono font-semibold">
+        {h.hour.slice(5).replace('T', ' ')}:00
+      </div>
+      <div className="space-y-0.5 font-mono tabular-nums">
+        <div>PV: {formatNumber(h.pv)}</div>
+        <div>请求: {formatNumber(h.requests)}</div>
+        <div>流量: {formatBytes(h.bytes)}</div>
+        {(h.err_4xx > 0 || h.err_5xx > 0) && (
+          <div className="text-bad">
+            异常: {h.err_4xx}/{h.err_5xx}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function HourlyBarChart({ hourly }: { hourly: AnalyticsHourlyPoint[] }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-
   if (hourly.length === 0) return null
-
-  const width = 420
-  const height = 220
-  const padL = 36
-  const padR = 10
-  const padT = 18
-  const padB = 28
-  const plotW = width - padL - padR
-  const plotH = height - padT - padB
-  const maxPV = Math.max(1, ...hourly.map((h) => h.pv))
-  const slotW = plotW / hourly.length
-  const barW = Math.max(4, slotW * 0.65)
-  const active = hoverIdx !== null ? hourly[hoverIdx] : hourly[hourly.length - 1]
 
   return (
     <section className="rounded-2xl border bg-card p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">近 24 小时分时访问</span>
-        <span className="font-mono">
-          {active.hour.slice(5).replace('T', ' ')}:00 · PV{' '}
-          <strong className="text-foreground">{formatNumber(active.pv)}</strong> · 请求{' '}
-          <strong className="text-foreground">{formatNumber(active.requests)}</strong>
-        </span>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold">近 24 小时分时 PV</span>
+        <span className="text-xs text-muted-foreground">按小时聚合</span>
       </div>
 
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-52 w-full select-none"
-        onMouseLeave={() => setHoverIdx(null)}
-      >
-        {[0, 0.5, 1].map((t) => {
-          const y = padT + plotH * (1 - t)
-          return (
-            <g key={t}>
-              <line
-                x1={padL}
-                y1={y}
-                x2={width - padR}
-                y2={y}
-                stroke="currentColor"
-                strokeOpacity={0.08}
-              />
-              <text
-                x={padL - 6}
-                y={y + 3}
-                textAnchor="end"
-                className="fill-muted-foreground font-mono text-[10px]"
-              >
-                {Math.round(maxPV * t)}
-              </text>
-            </g>
-          )
-        })}
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <BarChart
+            data={hourly}
+            margin={{ top: 8, right: 6, left: -18, bottom: 0 }}
+          >
+            <CartesianGrid
+              stroke="var(--border)"
+              strokeDasharray="3 3"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="hour"
+              tickFormatter={(v: string) => `${v.slice(11)}h`}
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+              interval={5}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+            />
+            <Tooltip
+              cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }}
+              content={<HourlyTooltip />}
+            />
+            <Bar dataKey="pv" radius={[3, 3, 0, 0]} maxBarSize={16}>
+              {hourly.map((entry) => (
+                <Cell
+                  key={entry.hour}
+                  fill={entry.err_5xx > 0 ? 'var(--bad)' : 'var(--ok)'}
+                  fillOpacity={0.75}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  )
+}
 
-        {hourly.map((h, i) => {
-          const xCenter = padL + (i + 0.5) * slotW
-          const y = padT + plotH - (h.pv / maxPV) * plotH
-          const bh = Math.max(1.5, padT + plotH - y)
-          const isHover = hoverIdx === i
-          return (
-            <g key={h.hour}>
-              <rect
-                x={xCenter - barW / 2}
-                y={y}
-                width={barW}
-                height={bh}
-                rx={2}
-                fill={h.err_5xx > 0 ? 'var(--bad)' : 'var(--ok)'}
-                fillOpacity={isHover ? 0.95 : 0.65}
-              />
-              <rect
-                x={padL + i * slotW}
-                y={padT}
-                width={slotW}
-                height={plotH}
-                fill="transparent"
-                onMouseEnter={() => setHoverIdx(i)}
-              />
-              {i % 6 === 0 && (
-                <text
-                  x={xCenter}
-                  y={height - 8}
-                  textAnchor="middle"
-                  className="fill-muted-foreground font-mono text-[10px]"
-                >
-                  {h.hour.slice(11)}h
-                </text>
-              )}
-            </g>
-          )
-        })}
-      </svg>
+function BotTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload: AnalyticsDimensionRow }>
+}) {
+  if (!active || !payload?.length) return null
+  const r = payload[0].payload
+  return (
+    <div className="rounded-xl border bg-popover/95 px-3 py-2 text-xs text-popover-foreground shadow-md backdrop-blur-sm">
+      <div className="mb-1 font-mono font-semibold">{r.key}</div>
+      <div className="space-y-0.5 font-mono tabular-nums">
+        <div>请求: {formatNumber(r.requests)} ({r.share.toFixed(1)}%)</div>
+        <div>流量: {formatBytes(r.bytes)}</div>
+        <div>异常: {formatNumber(r.err_count)}</div>
+      </div>
+    </div>
+  )
+}
+
+export function BotBreakdownChart({
+  rows,
+  totalBotHits,
+}: {
+  rows: AnalyticsDimensionRow[]
+  totalBotHits: number
+}) {
+  if (rows.length === 0) return null
+
+  return (
+    <section className="rounded-2xl border bg-card p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">爬虫 / Bot 流量构成 (Top 8)</h2>
+          <p className="text-xs text-muted-foreground">
+            已按 User-Agent 规则识别并从人类 DAU/PV 中剔除 · 共 {formatNumber(totalBotHits)} 次请求
+          </p>
+        </div>
+      </div>
+
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <BarChart
+            data={rows.slice(0, 8)}
+            layout="vertical"
+            margin={{ top: 4, right: 20, left: 10, bottom: 0 }}
+          >
+            <CartesianGrid
+              stroke="var(--border)"
+              strokeDasharray="3 3"
+              horizontal={false}
+            />
+            <XAxis
+              type="number"
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="key"
+              width={145}
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }}
+              content={<BotTooltip />}
+            />
+            <Bar
+              dataKey="requests"
+              fill="var(--wait)"
+              fillOpacity={0.78}
+              radius={[0, 4, 4, 0]}
+              maxBarSize={18}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </section>
   )
 }

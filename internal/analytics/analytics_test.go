@@ -244,6 +244,27 @@ func TestIngestDeduplicatedDAUAndDimensionTables(t *testing.T) {
 		t.Fatalf("unexpected error_path dim: %+v", errs)
 	}
 
+	bots, err := st.QueryDimension("blog", "bot", dr, "", "requests", "desc", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bots.Total != 1 || bots.Rows[0].Key != "Googlebot (Search)" || bots.Rows[0].Requests != 1 {
+		t.Fatalf("unexpected bot dim: %+v", bots)
+	}
+	botPaths, err := st.QueryDimension("blog", "bot_path", dr, "", "requests", "desc", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if botPaths.Total != 1 || botPaths.Rows[0].Key != "/posts/hello" {
+		t.Fatalf("unexpected bot_path dim: %+v", botPaths)
+	}
+	if isBot, name := classifyBot("Mozilla/5.0 (compatible; Barkrowler/0.9; +https://babbar.tech)"); !isBot || name != "Barkrowler (SEO)" {
+		t.Fatalf("classifyBot Barkrowler got (%v, %q), want (true, Barkrowler (SEO))", isBot, name)
+	}
+	if isBot, name := classifyBot("Mozilla/5.0 (compatible; DataForSeoBot/1.0; +https://dataforseo.com/)"); !isBot || name != "DataForSeoBot" {
+		t.Fatalf("classifyBot custom token got (%v, %q), want (true, DataForSeoBot)", isBot, name)
+	}
+
 	// CSV export sanity check.
 	var csvBuf bytes.Buffer
 	if err := WriteOverviewCSV(&csvBuf, ov); err != nil {
