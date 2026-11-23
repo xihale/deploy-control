@@ -9,7 +9,7 @@
 | `cmd/deployd/main.go` | 服务入口（`-config`）、SQLite 文件锁（`flock`）、路由挂载（`/webhook/github/`、`/api/`、`/healthz`、`/`） |
 | `internal/config/config.go` | YAML 配置解析与校验（对照模板 `config.example.yaml`） |
 | `internal/store/store.go` | SQLite（`modernc.org/sqlite`）任务/delivery 持久化与恢复 |
-| `internal/analytics/{parser,store,ingestor}.go` | Caddy JSON 访问日志增量采集、隐私去重 DAU/WAU/MAU 聚合（`analytics.db`）与维度查询 |
+| `internal/analytics/{parser,store,ingestor,shield}.go` | Caddy JSON 访问日志增量采集、隐私去重 DAU/WAU/MAU 聚合（`analytics.db`）、蜜罐自动封禁同步 Caddy 与维度查询 |
 | `internal/dispatch/dispatch.go` | 同站串行、全局有限并发调度队列 |
 | `internal/fetcher/{fetcher,git}.go` | 5 次统一拉取策略（首次强直连，HTTPS 重试走代理，SSH 永直连） |
 | `internal/runner/{runner,exec}.go` | 站点脚本执行（注入 `DEPLOY_*` 环境变量、可选 `run_as` `sudo -n -H -u` 与日志落盘） |
@@ -21,7 +21,7 @@
 | 目录 / 文件 | 核心内容 |
 |---|---|
 | 页面与路由 (`web/app/`) | `layout.tsx` · `globals.css` · `page.tsx`（总览）· `analytics/page.tsx`（访问统计）· `site/page.tsx`（单站）· `deploy/page.tsx`（任务日志） |
-| 组件 (`web/components/`) | `app-shell` · `auth-provider` · `overview` · `analytics-view` · `analytics-charts` · `site-view` · `deploy-view` · `log-viewer` · `manual-deploy-dialog` · `status-badge` · `ui/{button,dialog,input,label}` |
+| 组件 (`web/components/`) | `app-shell` · `auth-provider` · `overview` · `analytics-view` · `analytics-charts` · `shield-bans-panel` · `site-view` · `deploy-view` · `log-viewer` · `manual-deploy-dialog` · `status-badge` · `ui/{button,dialog,input,label}` |
 | 客户端库 (`web/lib/`, `hooks/`) | `api.ts` · `types.ts` · `status.ts` · `format.ts` · `mock.ts` & `mock-analytics.ts`（`demo` token 离线演示）· `hooks/use-api.ts` |
 | 运维配方 (`ops/gx/`) | `deployd.service` · `caddy-deploy.xeed.ink` · `scripts/run-site` · `scripts/lib/common.sh` · `scripts/sites.d/*` |
 

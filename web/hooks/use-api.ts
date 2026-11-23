@@ -14,6 +14,7 @@ import type {
   DeployStatus,
   Health,
   Me,
+  ShieldBansResponse,
   Site,
 } from '@/lib/types'
 
@@ -126,5 +127,19 @@ export function useAnalyticsDimensions(params: {
     token ? [path, token] : null,
     ([p, t]) => getJson<AnalyticsDimension>(p, t),
     { keepPreviousData: true },
+  )
+}
+
+export function useAnalyticsBans(params: {
+  q?: string
+  limit?: number
+  offset?: number
+}) {
+  const { token } = useAuth()
+  const path = `/api/analytics/bans${buildQuery(params)}`
+  return useSWR(
+    token ? [path, token] : null,
+    ([p, t]) => getJson<ShieldBansResponse>(p, t),
+    { refreshInterval: 30000, keepPreviousData: true },
   )
 }

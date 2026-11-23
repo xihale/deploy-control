@@ -34,6 +34,7 @@ import {
   HourlyBarChart,
 } from '@/components/analytics-charts'
 import { useAuth } from '@/components/auth-provider'
+import { ShieldBansPanel } from '@/components/shield-bans-panel'
 import { ErrorState, PageSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1045,6 +1046,8 @@ export function AnalyticsView() {
             from={from}
             to={to}
           />
+
+          <ShieldBansPanel />
         </>
       )}
     </div>

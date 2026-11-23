@@ -172,3 +172,25 @@ export interface AnalyticsDimension {
   total_bytes: number
   rows: AnalyticsDimensionRow[]
 }
+
+export interface ShieldBanRecord {
+  ip: string
+  reason: string
+  source: 'auto' | 'manual'
+  site: string
+  sample_path: string
+  sample_ua: string
+  hits: number
+  created_at: number
+  last_seen_at: number
+  expires_at: number
+}
+
+export interface ShieldBansResponse {
+  enabled: boolean
+  shield_enabled: boolean
+  default_ttl_hours: number
+  total: number
+  active_count: number
+  rows: ShieldBanRecord[]
+}

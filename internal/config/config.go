@@ -52,6 +52,19 @@ type Fetch struct {
 	Proxy string `yaml:"proxy"`
 }
 
+// Shield configures honeypot detection, auto-banning, and Caddy ban-list syncing.
+type Shield struct {
+	Enabled         bool     `yaml:"enabled"`
+	BanTTLHours     int      `yaml:"ban_ttl_hours"`     // <=0 defaults to 168 (7 days)
+	CaddyBanFile    string   `yaml:"caddy_ban_file"`    // generated Caddy snippet path (e.g. /etc/caddy/bans.caddy)
+	CaddyReloadCmd  []string `yaml:"caddy_reload_cmd"`  // optional command executed after CaddyBanFile updates
+	AllowIPs        []string `yaml:"allow_ips"`         // extra IPs/CIDRs exempt from auto-ban
+	HoneypotPaths   []string `yaml:"honeypot_paths"`    // optional extra honeypot paths/prefixes
+	ExcludePHPSites []string `yaml:"exclude_php_sites"` // sites where *.php is legitimate (e.g. fresh)
+	BanScanners     *bool    `yaml:"ban_scanners"`      // nil defaults to true
+	resolvedBanFile string
+}
+
 // Analytics configures passive Caddy JSON access-log ingestion and web traffic reporting.
 type Analytics struct {
 	Enabled       bool     `yaml:"enabled"`
@@ -62,6 +75,7 @@ type Analytics struct {
 	IgnoreBots    *bool    `yaml:"ignore_bots"`    // nil defaults to true
 	ExcludePaths  []string `yaml:"exclude_paths"`
 	ExcludeIPs    []string `yaml:"exclude_ips"`
+	Shield        Shield   `yaml:"shield"`
 	resolvedDB    string
 	resolvedLogs  []string
 	location      *time.Location
@@ -317,6 +331,57 @@ func (c *Config) validateAnalytics(base string) error {
 		cleanIPs = append(cleanIPs, raw)
 	}
 	a.ExcludeIPs = cleanIPs
+
+	sh := &a.Shield
+	if sh.BanTTLHours < 0 {
+		return fmt.Errorf("config: analytics.shield.ban_ttl_hours must be >= 0")
+	}
+	if sh.BanTTLHours == 0 {
+		sh.BanTTLHours = 168
+	}
+	if strings.TrimSpace(sh.CaddyBanFile) != "" {
+		sh.resolvedBanFile = c.resolve(base, sh.CaddyBanFile, "")
+	}
+	cleanAllow := make([]string, 0, len(sh.AllowIPs))
+	for _, raw := range sh.AllowIPs {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if _, err := netip.ParsePrefix(raw); err != nil {
+			if _, err2 := netip.ParseAddr(raw); err2 != nil {
+				return fmt.Errorf("config: analytics.shield.allow_ips invalid IP/CIDR %q", raw)
+			}
+		}
+		cleanAllow = append(cleanAllow, raw)
+	}
+	sh.AllowIPs = cleanAllow
+
+	cleanHoneypot := make([]string, 0, len(sh.HoneypotPaths))
+	for _, p := range sh.HoneypotPaths {
+		p = strings.ToLower(strings.TrimSpace(p))
+		if p != "" {
+			cleanHoneypot = append(cleanHoneypot, p)
+		}
+	}
+	sh.HoneypotPaths = cleanHoneypot
+
+	cleanExPHP := make([]string, 0, len(sh.ExcludePHPSites))
+	for _, s := range sh.ExcludePHPSites {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			cleanExPHP = append(cleanExPHP, s)
+		}
+	}
+	sh.ExcludePHPSites = cleanExPHP
+
+	cleanCmd := make([]string, 0, len(sh.CaddyReloadCmd))
+	for _, arg := range sh.CaddyReloadCmd {
+		if trimmed := strings.TrimSpace(arg); trimmed != "" {
+			cleanCmd = append(cleanCmd, trimmed)
+		}
+	}
+	sh.CaddyReloadCmd = cleanCmd
 	return nil
 }
 
@@ -466,4 +531,24 @@ func (a Analytics) ShouldIgnoreBots() bool {
 		return true
 	}
 	return *a.IgnoreBots
+}
+
+// ShieldBanFile returns the resolved Caddy ban snippet file path, or "".
+func (c *Config) ShieldBanFile() string { return c.Analytics.Shield.resolvedBanFile }
+
+// ShieldBanTTL returns the default ban duration (defaults to 7 days).
+func (c *Config) ShieldBanTTL() time.Duration {
+	hrs := c.Analytics.Shield.BanTTLHours
+	if hrs <= 0 {
+		hrs = 168
+	}
+	return time.Duration(hrs) * time.Hour
+}
+
+// ShouldBanScanners reports whether scanner UAs trigger auto-ban when Shield is enabled.
+func (s Shield) ShouldBanScanners() bool {
+	if s.BanScanners == nil {
+		return true
+	}
+	return *s.BanScanners
 }

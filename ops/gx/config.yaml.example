@@ -125,3 +125,18 @@ sites:
     url: https://deploy.xeed.ink
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
+
+analytics:
+  enabled: true
+  db_path: analytics.db
+  caddy_logs: [/var/log/caddy/*.log]
+  timezone: Asia/Shanghai
+  retention_days: 365
+  exclude_paths: [/api/, /healthz, /webhook/]
+  exclude_ips: [127.0.0.1, "::1"]
+  shield:
+    enabled: true
+    ban_ttl_hours: 168
+    caddy_ban_file: /etc/caddy/bans.caddy
+    caddy_reload_cmd: [systemctl, reload, caddy]
+    exclude_php_sites: [fresh]

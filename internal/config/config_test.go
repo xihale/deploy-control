@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidSHARequiresExactlyHexObjectID(t *testing.T) {
@@ -236,5 +237,27 @@ func TestAnalyticsConfigAndSiteHosts(t *testing.T) {
 	badIP.Analytics.ExcludeIPs = []string{"not-an-ip"}
 	if err := badIP.validate(filepath.Join(dir, "config.yaml")); err == nil {
 		t.Fatal("expected invalid exclude_ips to fail")
+	}
+
+	shieldCfg := cfg
+	shieldCfg.Analytics.Shield = Shield{
+		Enabled:      true,
+		CaddyBanFile: "bans.caddy",
+		AllowIPs:     []string{"203.0.113.0/24"},
+	}
+	if err := shieldCfg.validate(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Fatalf("expected valid shield config, got: %v", err)
+	}
+	if got, want := shieldCfg.ShieldBanFile(), filepath.Join(dir, "bans.caddy"); got != want {
+		t.Fatalf("shield ban file = %q, want %q", got, want)
+	}
+	if got := shieldCfg.ShieldBanTTL(); got != 168*time.Hour {
+		t.Fatalf("default shield ban ttl = %v, want 168h", got)
+	}
+
+	badAllow := shieldCfg
+	badAllow.Analytics.Shield.AllowIPs = []string{"bad-cidr"}
+	if err := badAllow.validate(filepath.Join(dir, "config.yaml")); err == nil {
+		t.Fatal("expected invalid shield allow_ips to fail")
 	}
 }

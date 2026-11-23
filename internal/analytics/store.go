@@ -239,6 +239,19 @@ CREATE TABLE IF NOT EXISTS daily_dim_stats (
 	PRIMARY KEY (day, site, dim, key)
 );
 CREATE INDEX IF NOT EXISTS idx_daily_dim_lookup ON daily_dim_stats(dim, day, site);
+CREATE TABLE IF NOT EXISTS banned_ips (
+	ip TEXT PRIMARY KEY,
+	reason TEXT NOT NULL,
+	source TEXT NOT NULL,
+	site TEXT NOT NULL DEFAULT '',
+	sample_path TEXT NOT NULL DEFAULT '',
+	sample_ua TEXT NOT NULL DEFAULT '',
+	hits INTEGER NOT NULL DEFAULT 1,
+	created_at INTEGER NOT NULL,
+	last_seen_at INTEGER NOT NULL,
+	expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON banned_ips(expires_at);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("migrate analytics schema: %w", err)

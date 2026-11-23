@@ -27,6 +27,7 @@ type Server struct {
 	Store     *store.Store
 	Disp      *dispatch.Dispatcher
 	Analytics *analytics.Store
+	Shield    *analytics.ShieldManager
 	LogDir    string
 }
 
@@ -69,9 +70,22 @@ func (s *Server) requireRole(w http.ResponseWriter, r *http.Request, role config
 // ServeHTTP routes /api/* and /healthz.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
-	if path != "/api/deploys" && r.Method != http.MethodGet || path == "/api/deploys" && r.Method != http.MethodGet && r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+	switch path {
+	case "/api/deploys":
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	case "/api/analytics/bans":
+		if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	default:
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 	}
 	switch {
 	case path == "/healthz":
@@ -106,6 +120,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleAnalyticsDimensions(w, r)
 	case path == "/api/analytics/export":
 		s.handleAnalyticsExport(w, r)
+	case path == "/api/analytics/bans":
+		s.handleAnalyticsBans(w, r)
 	case strings.HasPrefix(path, "/api/analytics/sites/"):
 		siteName := strings.TrimPrefix(path, "/api/analytics/sites/")
 		if siteName == "" || strings.Contains(siteName, "/") {
@@ -522,5 +538,86 @@ func (s *Server) handleAnalyticsExport(w http.ResponseWriter, r *http.Request) {
 		_ = analytics.WriteDimensionCSV(w, rep)
 	default:
 		http.Error(w, "unsupported export type", http.StatusBadRequest)
+	}
+}
+
+func (s *Server) handleAnalyticsBans(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		if _, ok := s.requireRole(w, r, config.RoleViewer); !ok {
+			return
+		}
+		if !s.analyticsEnabled() {
+			writeJSON(w, http.StatusOK, analytics.BansResponse{
+				Enabled:       false,
+				ShieldEnabled: false,
+				DefaultTTLHrs: s.Cfg.Analytics.Shield.BanTTLHours,
+				Rows:          []analytics.BanRecord{},
+			})
+			return
+		}
+		q := r.URL.Query()
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		offset, _ := strconv.Atoi(q.Get("offset"))
+		rep, err := s.Analytics.ListBansPage(time.Now(), q.Get("q"), limit, offset)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		rep.ShieldEnabled = s.Cfg.Analytics.Shield.Enabled
+		rep.DefaultTTLHrs = s.Cfg.Analytics.Shield.BanTTLHours
+		writeJSON(w, http.StatusOK, rep)
+
+	case http.MethodPost:
+		if _, ok := s.requireRole(w, r, config.RoleAdmin); !ok {
+			return
+		}
+		if !s.analyticsEnabled() || s.Shield == nil || !s.Cfg.Analytics.Shield.Enabled {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shield is disabled"})
+			return
+		}
+		var req struct {
+			IP       string `json:"ip"`
+			Reason   string `json:"reason"`
+			TTLHours int    `json:"ttl_hours"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 16*1024)).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		rec, err := s.Shield.BanManual(r.Context(), req.IP, req.Reason, req.TTLHours)
+		if err != nil {
+			status := http.StatusBadRequest
+			if !errors.Is(err, analytics.ErrProtectedIP) && !strings.Contains(err.Error(), "invalid ip") {
+				status = http.StatusInternalServerError
+			}
+			writeJSON(w, status, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, rec)
+
+	case http.MethodDelete:
+		if _, ok := s.requireRole(w, r, config.RoleAdmin); !ok {
+			return
+		}
+		if !s.analyticsEnabled() || s.Shield == nil || !s.Cfg.Analytics.Shield.Enabled {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shield is disabled"})
+			return
+		}
+		ip := strings.TrimSpace(r.URL.Query().Get("ip"))
+		if ip == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ip is required"})
+			return
+		}
+		removed, err := s.Shield.Unban(r.Context(), ip)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if strings.Contains(err.Error(), "invalid ip") {
+				status = http.StatusBadRequest
+			}
+			writeJSON(w, status, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "removed": removed})
 	}
 }

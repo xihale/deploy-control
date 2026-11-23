@@ -32,6 +32,9 @@ type Event struct {
 	Status      int
 	Bytes       int64
 	DurationMS  float64
+	ClientIP    string
+	UserAgent   string
+	Threat      string
 	IsBot       bool
 	BotName     string
 	IsAsset     bool
@@ -42,21 +45,31 @@ type Event struct {
 // Matcher maps Caddy access log entries onto configured sites and applies
 // exclusion and classification rules.
 type Matcher struct {
-	hostToSite   map[string]string
-	excludePaths []string
-	excludeAddrs []netip.Addr
-	excludeCIDRs []netip.Prefix
-	ignoreBots   bool
-	loc          *time.Location
+	hostToSite      map[string]string
+	excludePaths    []string
+	excludeAddrs    []netip.Addr
+	excludeCIDRs    []netip.Prefix
+	allowAddrs      []netip.Addr
+	allowCIDRs      []netip.Prefix
+	extraHoneypot   []string
+	excludePHPSites map[string]bool
+	shieldEnabled   bool
+	banScanners     bool
+	ignoreBots      bool
+	loc             *time.Location
 }
 
 // NewMatcher builds a Matcher from cfg.
 func NewMatcher(cfg *config.Config) *Matcher {
 	m := &Matcher{
-		hostToSite:   make(map[string]string),
-		excludePaths: append([]string(nil), cfg.Analytics.ExcludePaths...),
-		ignoreBots:   cfg.Analytics.ShouldIgnoreBots(),
-		loc:          cfg.AnalyticsLocation(),
+		hostToSite:      make(map[string]string),
+		excludePaths:    append([]string(nil), cfg.Analytics.ExcludePaths...),
+		extraHoneypot:   append([]string(nil), cfg.Analytics.Shield.HoneypotPaths...),
+		excludePHPSites: make(map[string]bool),
+		shieldEnabled:   cfg.Analytics.Shield.Enabled,
+		banScanners:     cfg.Analytics.Shield.ShouldBanScanners(),
+		ignoreBots:      cfg.Analytics.ShouldIgnoreBots(),
+		loc:             cfg.AnalyticsLocation(),
 	}
 	for _, s := range cfg.Sites {
 		for _, h := range s.AnalyticsHosts() {
@@ -65,14 +78,25 @@ func NewMatcher(cfg *config.Config) *Matcher {
 			}
 		}
 	}
-	for _, raw := range cfg.Analytics.ExcludeIPs {
+	for _, site := range cfg.Analytics.Shield.ExcludePHPSites {
+		m.excludePHPSites[site] = true
+	}
+	m.excludeAddrs, m.excludeCIDRs = parseIPRules(cfg.Analytics.ExcludeIPs)
+	m.allowAddrs, m.allowCIDRs = parseIPRules(cfg.Analytics.Shield.AllowIPs)
+	return m
+}
+
+func parseIPRules(list []string) ([]netip.Addr, []netip.Prefix) {
+	var addrs []netip.Addr
+	var cidrs []netip.Prefix
+	for _, raw := range list {
 		if p, err := netip.ParsePrefix(raw); err == nil {
-			m.excludeCIDRs = append(m.excludeCIDRs, p)
+			cidrs = append(cidrs, p)
 		} else if a, err := netip.ParseAddr(raw); err == nil {
-			m.excludeAddrs = append(m.excludeAddrs, a)
+			addrs = append(addrs, a.Unmap())
 		}
 	}
-	return m
+	return addrs, cidrs
 }
 
 // SiteForHost resolves a request host to a configured site name.
@@ -82,8 +106,8 @@ func (m *Matcher) SiteForHost(host string) (string, bool) {
 	return site, ok
 }
 
-func (m *Matcher) isExcludedIP(ipStr string) bool {
-	if ipStr == "" || (len(m.excludeAddrs) == 0 && len(m.excludeCIDRs) == 0) {
+func matchIPRule(ipStr string, addrs []netip.Addr, cidrs []netip.Prefix) bool {
+	if ipStr == "" || (len(addrs) == 0 && len(cidrs) == 0) {
 		return false
 	}
 	addr, err := netip.ParseAddr(ipStr)
@@ -91,17 +115,36 @@ func (m *Matcher) isExcludedIP(ipStr string) bool {
 		return false
 	}
 	addr = addr.Unmap()
-	for _, a := range m.excludeAddrs {
-		if a.Unmap() == addr {
+	for _, a := range addrs {
+		if a == addr {
 			return true
 		}
 	}
-	for _, p := range m.excludeCIDRs {
+	for _, p := range cidrs {
 		if p.Contains(addr) {
 			return true
 		}
 	}
 	return false
+}
+
+func (m *Matcher) isExcludedIP(ipStr string) bool {
+	return matchIPRule(ipStr, m.excludeAddrs, m.excludeCIDRs)
+}
+
+// IsProtectedIP reports whether ipStr must never be banned (loopback, private,
+// link-local, unspecified, exclude_ips, or shield.allow_ips).
+func (m *Matcher) IsProtectedIP(ipStr string) bool {
+	addr, err := netip.ParseAddr(strings.TrimSpace(ipStr))
+	if err != nil {
+		return true
+	}
+	addr = addr.Unmap()
+	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() || addr.IsUnspecified() {
+		return true
+	}
+	return matchIPRule(addr.String(), m.excludeAddrs, m.excludeCIDRs) ||
+		matchIPRule(addr.String(), m.allowAddrs, m.allowCIDRs)
 }
 
 func (m *Matcher) isExcludedPath(p string) bool {
@@ -176,6 +219,21 @@ func (m *Matcher) ParseLine(line []byte, salt string) (Event, bool) {
 	method := strings.ToUpper(strings.TrimSpace(raw.Request.Method))
 	botOnly := isBot && m.ignoreBots
 
+	var threat string
+	if m.shieldEnabled {
+		threat = m.detectThreat(site, reqPath, ua, botName)
+		if threat != "" {
+			if !isBot {
+				isBot = true
+				botName = "Honeypot Probe"
+			}
+			botOnly = m.ignoreBots
+			if ip == "" || m.IsProtectedIP(ip) {
+				threat = ""
+			}
+		}
+	}
+
 	// PV counts human GET requests for non-asset, page-like resources returning 200/206/304.
 	isPV := !botOnly && method == "GET" && !isAsset && !isNonHTMLContentType(contentType) &&
 		(raw.Status == 200 || raw.Status == 206 || raw.Status == 304)
@@ -196,6 +254,9 @@ func (m *Matcher) ParseLine(line []byte, salt string) (Event, bool) {
 		Hour:        localTS.Format("2006-01-02T15"),
 		UnixSec:     ts.Unix(),
 		VisitorHash: hashVisitor(salt, ip, ua),
+		ClientIP:    ip,
+		UserAgent:   ua,
+		Threat:      threat,
 		Path:        reqPath,
 		Referrer:    ref,
 		Browser:     browser,

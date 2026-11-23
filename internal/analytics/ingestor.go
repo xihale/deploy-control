@@ -26,10 +26,12 @@ type Ingestor struct {
 	cfg     *config.Config
 	store   *Store
 	matcher *Matcher
+	shield  *ShieldManager
 	logf    func(string, ...any)
 
-	mu           sync.Mutex
-	lastPruneDay string
+	mu             sync.Mutex
+	lastPruneDay   string
+	lastShieldSync time.Time
 }
 
 // NewIngestor creates a Caddy log ingestor bound to cfg and store.
@@ -45,9 +47,23 @@ func NewIngestor(cfg *config.Config, st *Store, logf func(string, ...any)) *Inge
 	}
 }
 
+// SetShield attaches a ShieldManager to handle auto-ban threat hits and periodic
+// Caddy ban-list synchronization.
+func (ing *Ingestor) SetShield(s *ShieldManager) {
+	ing.mu.Lock()
+	defer ing.mu.Unlock()
+	ing.shield = s
+}
+
 // Start runs an immediate ingestion pass and polls for new log lines until ctx
 // is cancelled.
 func (ing *Ingestor) Start(ctx context.Context) {
+	if ing.shield != nil {
+		if err := ing.shield.Sync(ctx); err != nil && ctx.Err() == nil {
+			ing.logf("shield initial sync: %v", err)
+		}
+		ing.lastShieldSync = time.Now()
+	}
 	if err := ing.Tick(ctx); err != nil && ctx.Err() == nil {
 		ing.logf("analytics initial ingest: %v", err)
 	}
@@ -90,6 +106,13 @@ func (ing *Ingestor) Tick(ctx context.Context) error {
 			return err
 		}
 		ing.lastPruneDay = today
+	}
+	if ing.shield != nil && time.Since(ing.lastShieldSync) >= time.Minute {
+		if err := ing.shield.Sync(ctx); err != nil && ctx.Err() == nil {
+			ing.logf("shield periodic sync: %v", err)
+		} else {
+			ing.lastShieldSync = time.Now()
+		}
 	}
 	return nil
 }
@@ -156,14 +179,17 @@ func (ing *Ingestor) ingestFile(ctx context.Context, path string) error {
 
 	reader := bufio.NewReaderSize(f, 64*1024)
 	salt := ing.store.Salt()
+	ttlSec := int64(ing.cfg.ShieldBanTTL().Seconds())
 
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		events := make([]Event, 0, 128)
+		var threatHits []ThreatHit
 		var bytesConsumed int64
 		linesRead := 0
+		nowUnix := time.Now().Unix()
 
 		for linesRead < maxBatchLines {
 			line, err := reader.ReadBytes('\n')
@@ -177,6 +203,18 @@ func (ing *Ingestor) ingestFile(ctx context.Context, path string) error {
 				linesRead++
 				if ev, ok := ing.matcher.ParseLine(line, salt); ok {
 					events = append(events, ev)
+					if ing.shield != nil && ev.Threat != "" && ev.ClientIP != "" {
+						if ttlSec <= 0 || ev.UnixSec <= 0 || nowUnix-ev.UnixSec < ttlSec {
+							threatHits = append(threatHits, ThreatHit{
+								IP:     ev.ClientIP,
+								Reason: ev.Threat,
+								Site:   ev.Site,
+								Path:   ev.Path,
+								UA:     ev.UserAgent,
+								TS:     ev.UnixSec,
+							})
+						}
+					}
 				}
 			}
 			if err != nil {
@@ -198,6 +236,11 @@ func (ing *Ingestor) ingestFile(ctx context.Context, path string) error {
 		}
 		if err := ing.store.IngestBatch(events, cur); err != nil {
 			return err
+		}
+		if ing.shield != nil && len(threatHits) > 0 {
+			if err := ing.shield.RecordAutoBans(ctx, threatHits); err != nil {
+				ing.logf("shield auto-ban %s: %v", path, err)
+			}
 		}
 		if linesRead < maxBatchLines {
 			break

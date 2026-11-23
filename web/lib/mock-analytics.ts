@@ -8,6 +8,8 @@ import type {
   AnalyticsOverview,
   AnalyticsSiteReport,
   AnalyticsSiteRow,
+  ShieldBanRecord,
+  ShieldBansResponse,
   Site,
 } from './types'
 
@@ -89,8 +91,100 @@ function dailyForSite(site: string, day: string): AnalyticsDailyPoint {
   }
 }
 
-export function mockAnalyticsRequest(sites: Site[], url: URL): Response | null {
+const demoNowSec = Math.floor(Date.now() / 1000)
+let mockBans: ShieldBanRecord[] = [
+  {
+    ip: '45.148.10.212',
+    reason: 'honeypot',
+    source: 'auto',
+    site: 'blog',
+    sample_path: '/.env',
+    sample_ua: 'Mozilla/5.0 (compatible; zgrab/0.x)',
+    hits: 14,
+    created_at: demoNowSec - 3600 * 5,
+    last_seen_at: demoNowSec - 120,
+    expires_at: demoNowSec + 3600 * (168 - 5),
+  },
+  {
+    ip: '185.220.101.34',
+    reason: 'scanner',
+    source: 'auto',
+    site: 'deploy-control',
+    sample_path: '/wp-login.php',
+    sample_ua: 'nuclei/3.2.0',
+    hits: 6,
+    created_at: demoNowSec - 3600 * 18,
+    last_seen_at: demoNowSec - 1800,
+    expires_at: demoNowSec + 3600 * (168 - 18),
+  },
+]
+
+export function mockAnalyticsRequest(
+  sites: Site[],
+  url: URL,
+  method = 'GET',
+  bodyText?: string,
+): Response | null {
   const p = url.pathname
+  if (p === '/api/analytics/bans') {
+    if (method === 'POST') {
+      const body = JSON.parse(bodyText || '{}')
+      const ip = String(body.ip || '').trim()
+      if (!ip) return new Response('invalid ip', { status: 400 })
+      const ttl = Number(body.ttl_hours ?? 168)
+      const now = Math.floor(Date.now() / 1000)
+      const rec: ShieldBanRecord = {
+        ip,
+        reason: String(body.reason || 'manual'),
+        source: 'manual',
+        site: '',
+        sample_path: '',
+        sample_ua: '',
+        hits: 1,
+        created_at: now,
+        last_seen_at: now,
+        expires_at: ttl < 0 ? 0 : now + (ttl || 168) * 3600,
+      }
+      mockBans = [rec, ...mockBans.filter((b) => b.ip !== ip)]
+      return new Response(JSON.stringify(rec), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    if (method === 'DELETE') {
+      const ip = url.searchParams.get('ip') || ''
+      const before = mockBans.length
+      mockBans = mockBans.filter((b) => b.ip !== ip)
+      return new Response(JSON.stringify({ ok: true, removed: mockBans.length < before }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase()
+    const limit = Number(url.searchParams.get('limit') || 20)
+    const offset = Number(url.searchParams.get('offset') || 0)
+    const filtered = q
+      ? mockBans.filter(
+          (b) =>
+            b.ip.toLowerCase().includes(q) ||
+            b.reason.toLowerCase().includes(q) ||
+            b.sample_path.toLowerCase().includes(q) ||
+            b.sample_ua.toLowerCase().includes(q),
+        )
+      : mockBans
+    const rep: ShieldBansResponse = {
+      enabled: true,
+      shield_enabled: true,
+      default_ttl_hours: 168,
+      total: filtered.length,
+      active_count: mockBans.length,
+      rows: filtered.slice(offset, offset + limit),
+    }
+    return new Response(JSON.stringify(rep), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
   const dr = resolveDemoRange(url)
   const days = listDays(dr)
 

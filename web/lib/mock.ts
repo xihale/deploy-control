@@ -199,7 +199,7 @@ export async function mockRequest(path: string, init?: RequestInit) {
 
   if (p.startsWith('/api/analytics/')) {
     const { mockAnalyticsRequest } = await import('./mock-analytics')
-    const res = mockAnalyticsRequest(SITES, url)
+    const res = mockAnalyticsRequest(SITES, url, method, init?.body ? String(init.body) : undefined)
     if (res) return res
   }
 

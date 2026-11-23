@@ -62,17 +62,21 @@ func main() {
 	disp := dispatch.New(cfg, st, r)
 
 	var analyticsStore *analytics.Store
+	var shieldMgr *analytics.ShieldManager
 	if cfg.Analytics.Enabled {
 		analyticsStore, err = analytics.Open(cfg.AnalyticsDBFile())
 		if err != nil {
 			log.Fatalf("analytics store: %v", err)
 		}
 		defer analyticsStore.Close()
+		if cfg.Analytics.Shield.Enabled {
+			shieldMgr = analytics.NewShieldManager(cfg, analyticsStore, nil)
+		}
 	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/webhook/github/", &webhook.Handler{Cfg: cfg, Store: st, Disp: disp})
-	apiServer := &api.Server{Cfg: cfg, Store: st, Disp: disp, Analytics: analyticsStore, LogDir: cfg.LogDirectory()}
+	apiServer := &api.Server{Cfg: cfg, Store: st, Disp: disp, Analytics: analyticsStore, Shield: shieldMgr, LogDir: cfg.LogDirectory()}
 	mux.Handle("/api/", apiServer)
 	mux.Handle("/healthz", apiServer)
 	webRoot := cfg.WebRoot()
@@ -97,6 +101,9 @@ func main() {
 	disp.Start(ctx)
 	if analyticsStore != nil {
 		ing := analytics.NewIngestor(cfg, analyticsStore, nil)
+		if shieldMgr != nil {
+			ing.SetShield(shieldMgr)
+		}
 		ing.Start(ctx)
 	}
 

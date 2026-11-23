@@ -1,11 +1,12 @@
-# Reusable Caddy WAF / bot-shield snippet for edge (`g`) and origin (`gx`).
-# Blocks common exploit probe paths, vulnerability scanners, and aggressive AI/SEO bots.
-# Include `import bot_shield` inside site blocks (or on `g`'s `xeed.ink, *.xeed.ink` proxy).
+# Reusable Caddy honeypot decoy + bot-shield snippet for `gx` (and optional `g`).
+# Requires `/etc/caddy/bans.caddy` (auto-generated `(ip_bans)` snippet by deployd shield)
+# to be imported near the top of Caddyfile, plus `import bot_shield` inside site blocks.
 (bot_shield) {
-	@bad_path {
+	import ip_bans
+	@honeypot_path {
 		path /wp-admin* /wp-login* /wp-content* /wp-includes* /xmlrpc.php /.env /.env.* /.git* /.svn* /.hg* /.DS_Store /cgi-bin/* /phpmyadmin* /pma* /actuator*
 	}
-	@bad_php {
+	@honeypot_php {
 		not {
 			host fresh.xeed.ink fresh.gx.xihale.top
 		}
@@ -15,8 +16,12 @@
 		header_regexp User-Agent (?i)(nuclei|sqlmap|nikto|zgrab|masscan|nmap|dirbuster|gobuster|feroxbuster|wpscan|acunetix|nessus|openvas|fhscan|zmeu|libwww-perl|morfeus|python-httpx|semrushbot|ahrefsbot|mj12bot|dotbot|barkrowler|blexbot|dataforseobot|generalretrievalbot|elevenlabscrawler|bytespider|ccbot|gptbot|claudebot|anthropic-ai|perplexitybot|amazonbot|meta-externalagent|meta-webindexer)
 	}
 	route {
-		respond @bad_path 403
-		respond @bad_php 403
+		header @honeypot_path Content-Type "text/plain; charset=utf-8"
+		header @honeypot_path Cache-Control "no-store"
+		respond @honeypot_path "CAONIMAGEBI=Fuck_You_Bitch" 200
+		header @honeypot_php Content-Type "text/plain; charset=utf-8"
+		header @honeypot_php Cache-Control "no-store"
+		respond @honeypot_php "CAONIMAGEBI=Fuck_You_Bitch" 200
 		respond @bad_ua 403
 	}
 }

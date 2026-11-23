@@ -192,3 +192,104 @@ analytics:
 		}
 	}
 }
+
+func TestAnalyticsBansRBACAndLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "access.log")
+	banFile := filepath.Join(dir, "bans.caddy")
+	adminToken := "admin-secret"
+	viewerToken := "viewer-secret"
+	adminHash := fmt.Sprintf("%x", sha256.Sum256([]byte(adminToken)))
+	viewerHash := fmt.Sprintf("%x", sha256.Sum256([]byte(viewerToken)))
+
+	cfgYAML := fmt.Sprintf(`
+db_path: %s
+users:
+  - name: admin
+    token_hash: %s
+    role: admin
+  - name: viewer
+    token_hash: %s
+    role: viewer
+sites:
+  - name: blog
+    repo: https://github.com/example/blog
+    branch: main
+    url: https://blog.example.com
+    script: /bin/true
+analytics:
+  enabled: true
+  db_path: %s
+  caddy_logs: [%q]
+  timezone: UTC
+  shield:
+    enabled: true
+    ban_ttl_hours: 168
+    caddy_ban_file: %q
+`, filepath.Join(dir, "deploy.db"), adminHash, viewerHash, filepath.Join(dir, "analytics.db"), logPath, banFile)
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(cfg.DBFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ast, err := analytics.Open(cfg.AnalyticsDBFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ast.Close() })
+	shield := analytics.NewShieldManager(cfg, ast, nil)
+	srv := &Server{Cfg: cfg, Store: st, Analytics: ast, Shield: shield, LogDir: t.TempDir()}
+
+	// Viewer cannot POST or DELETE bans.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/analytics/bans", strings.NewReader(`{"ip":"203.0.113.44","reason":"test"}`))
+	req.Header.Set("Authorization", "Bearer "+viewerToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for viewer POST, got %d", rec.Code)
+	}
+
+	// Admin bans 203.0.113.44.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/analytics/bans", strings.NewReader(`{"ip":"203.0.113.44","reason":"scanner","ttl_hours":168}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for admin POST, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Protected IP is rejected.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/analytics/bans", strings.NewReader(`{"ip":"127.0.0.1","reason":"oops"}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for loopback IP, got %d", rec.Code)
+	}
+
+	// Viewer can GET bans list.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/analytics/bans?q=203.0.113.44", nil)
+	req.Header.Set("Authorization", "Bearer "+viewerToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "203.0.113.44") {
+		t.Fatalf("expected 200 with IP in list, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Admin deletes ban.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/analytics/bans?ip=203.0.113.44", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"removed":true`) {
+		t.Fatalf("expected unban ok, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

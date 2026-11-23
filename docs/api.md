@@ -21,6 +21,9 @@
 | `GET /api/analytics/sites/{site}` | `viewer` | 单站日活/PV/分时/按日明细统计 |
 | `GET /api/analytics/dimensions` | `viewer` | 维度明细表（`?site=_all|&lt;site&gt;&amp;dim=path|referrer|browser|os|device|status|error_path|bot|bot_path&amp;q=&amp;sort=&amp;order=&amp;limit=&amp;offset=`） |
 | `GET /api/analytics/export` | `viewer` | CSV 导出（`?type=overview|daily|dimension&amp;site=&amp;dim=`） |
+| `GET /api/analytics/bans` | `viewer` | 蜜罐/扫描器自动与手动封禁 IP 列表（支持 `?q=&amp;limit=&amp;offset=`） |
+| `POST /api/analytics/bans` | `admin` | 手动封禁 IP（`{"ip":"...","reason":"...","ttl_hours":168}`） |
+| `DELETE /api/analytics/bans` | `admin` | 手动解封 IP（`?ip=...`），立即同步 Caddy |
 | `POST /webhook/github/{site}` | HMAC 验签 | GitHub Webhook（默认 `push`，可配置 `release`） |
 
 ## 手动部署

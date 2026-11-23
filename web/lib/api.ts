@@ -56,6 +56,14 @@ export async function postJson<T>(
   return res.json() as Promise<T>
 }
 
+export async function deleteJson<T>(
+  path: string,
+  token: string | null,
+): Promise<T> {
+  const res = await ensureOk(await send(path, token, { method: 'DELETE' }))
+  return res.json() as Promise<T>
+}
+
 export function buildQuery(params: Record<string, string | number | undefined>) {
   const q = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
