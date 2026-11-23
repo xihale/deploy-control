@@ -190,6 +190,8 @@ export interface ShieldBansResponse {
   enabled: boolean
   shield_enabled: boolean
   default_ttl_hours: number
+  max_bans?: number
+  subnet_threshold?: number
   total: number
   active_count: number
   rows: ShieldBanRecord[]

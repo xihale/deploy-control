@@ -137,6 +137,9 @@ analytics:
   shield:
     enabled: true
     ban_ttl_hours: 168
+    max_bans: 5000
+    subnet_threshold: 5
+    reload_cooldown_sec: 15
     caddy_ban_file: /etc/caddy/bans.caddy
     caddy_reload_cmd: [systemctl, reload, caddy]
     exclude_php_sites: [fresh]

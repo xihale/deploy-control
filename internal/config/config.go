@@ -54,15 +54,18 @@ type Fetch struct {
 
 // Shield configures honeypot detection, auto-banning, and Caddy ban-list syncing.
 type Shield struct {
-	Enabled         bool     `yaml:"enabled"`
-	BanTTLHours     int      `yaml:"ban_ttl_hours"`     // <=0 defaults to 168 (7 days)
-	CaddyBanFile    string   `yaml:"caddy_ban_file"`    // generated Caddy snippet path (e.g. /etc/caddy/bans.caddy)
-	CaddyReloadCmd  []string `yaml:"caddy_reload_cmd"`  // optional command executed after CaddyBanFile updates
-	AllowIPs        []string `yaml:"allow_ips"`         // extra IPs/CIDRs exempt from auto-ban
-	HoneypotPaths   []string `yaml:"honeypot_paths"`    // optional extra honeypot paths/prefixes
-	ExcludePHPSites []string `yaml:"exclude_php_sites"` // sites where *.php is legitimate (e.g. fresh)
-	BanScanners     *bool    `yaml:"ban_scanners"`      // nil defaults to true
-	resolvedBanFile string
+	Enabled           bool     `yaml:"enabled"`
+	BanTTLHours       int      `yaml:"ban_ttl_hours"`       // <=0 defaults to 168 (7 days)
+	MaxBans           int      `yaml:"max_bans"`            // <=0 defaults to 5000 active entries (LRU evicts oldest auto-bans)
+	SubnetThreshold   int      `yaml:"subnet_threshold"`    // <=0 defaults to 5 IPs per /24 or /64 to collapse into a CIDR ban
+	ReloadCooldownSec int      `yaml:"reload_cooldown_sec"` // <=0 defaults to 15s cooldown between auto-ban Caddy reloads
+	CaddyBanFile      string   `yaml:"caddy_ban_file"`      // generated Caddy snippet path (e.g. /etc/caddy/bans.caddy)
+	CaddyReloadCmd    []string `yaml:"caddy_reload_cmd"`    // optional command executed after CaddyBanFile updates
+	AllowIPs          []string `yaml:"allow_ips"`           // extra IPs/CIDRs exempt from auto-ban
+	HoneypotPaths     []string `yaml:"honeypot_paths"`      // optional extra honeypot paths/prefixes
+	ExcludePHPSites   []string `yaml:"exclude_php_sites"`   // sites where *.php is legitimate (e.g. fresh)
+	BanScanners       *bool    `yaml:"ban_scanners"`        // nil defaults to true
+	resolvedBanFile   string
 }
 
 // Analytics configures passive Caddy JSON access-log ingestion and web traffic reporting.
@@ -339,6 +342,24 @@ func (c *Config) validateAnalytics(base string) error {
 	if sh.BanTTLHours == 0 {
 		sh.BanTTLHours = 168
 	}
+	if sh.MaxBans < 0 {
+		return fmt.Errorf("config: analytics.shield.max_bans must be >= 0")
+	}
+	if sh.MaxBans == 0 {
+		sh.MaxBans = 5000
+	}
+	if sh.SubnetThreshold < 0 {
+		return fmt.Errorf("config: analytics.shield.subnet_threshold must be >= 0")
+	}
+	if sh.SubnetThreshold == 0 {
+		sh.SubnetThreshold = 5
+	}
+	if sh.ReloadCooldownSec < 0 {
+		return fmt.Errorf("config: analytics.shield.reload_cooldown_sec must be >= 0")
+	}
+	if sh.ReloadCooldownSec == 0 {
+		sh.ReloadCooldownSec = 15
+	}
 	if strings.TrimSpace(sh.CaddyBanFile) != "" {
 		sh.resolvedBanFile = c.resolve(base, sh.CaddyBanFile, "")
 	}
@@ -543,6 +564,33 @@ func (c *Config) ShieldBanTTL() time.Duration {
 		hrs = 168
 	}
 	return time.Duration(hrs) * time.Hour
+}
+
+// ShieldMaxBans returns the maximum number of active ban rows retained (defaults to 5000).
+func (c *Config) ShieldMaxBans() int {
+	if c.Analytics.Shield.MaxBans <= 0 {
+		return 5000
+	}
+	return c.Analytics.Shield.MaxBans
+}
+
+// ShieldSubnetThreshold returns how many distinct banned IPs in one /24 or /64
+// collapse into a CIDR ban (defaults to 5).
+func (c *Config) ShieldSubnetThreshold() int {
+	if c.Analytics.Shield.SubnetThreshold <= 0 {
+		return 5
+	}
+	return c.Analytics.Shield.SubnetThreshold
+}
+
+// ShieldReloadCooldown returns the minimum interval between automatic Caddy
+// reload invocations (defaults to 15s).
+func (c *Config) ShieldReloadCooldown() time.Duration {
+	sec := c.Analytics.Shield.ReloadCooldownSec
+	if sec <= 0 {
+		sec = 15
+	}
+	return time.Duration(sec) * time.Second
 }
 
 // ShouldBanScanners reports whether scanner UAs trigger auto-ban when Shield is enabled.

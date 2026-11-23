@@ -107,11 +107,15 @@ func (ing *Ingestor) Tick(ctx context.Context) error {
 		}
 		ing.lastPruneDay = today
 	}
-	if ing.shield != nil && time.Since(ing.lastShieldSync) >= time.Minute {
-		if err := ing.shield.Sync(ctx); err != nil && ctx.Err() == nil {
-			ing.logf("shield periodic sync: %v", err)
-		} else {
-			ing.lastShieldSync = time.Now()
+	if ing.shield != nil {
+		if time.Since(ing.lastShieldSync) >= time.Minute {
+			if err := ing.shield.Sync(ctx); err != nil && ctx.Err() == nil {
+				ing.logf("shield periodic sync: %v", err)
+			} else {
+				ing.lastShieldSync = time.Now()
+			}
+		} else if err := ing.shield.FlushPendingReload(ctx); err != nil && ctx.Err() == nil {
+			ing.logf("shield deferred reload: %v", err)
 		}
 	}
 	return nil

@@ -241,6 +241,7 @@ CREATE TABLE IF NOT EXISTS daily_dim_stats (
 CREATE INDEX IF NOT EXISTS idx_daily_dim_lookup ON daily_dim_stats(dim, day, site);
 CREATE TABLE IF NOT EXISTS banned_ips (
 	ip TEXT PRIMARY KEY,
+	subnet TEXT NOT NULL DEFAULT '',
 	reason TEXT NOT NULL,
 	source TEXT NOT NULL,
 	site TEXT NOT NULL DEFAULT '',
@@ -255,6 +256,9 @@ CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON banned_ips(expires_at);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("migrate analytics schema: %w", err)
+	}
+	if err := s.ensureBannedIPsSubnetColumn(); err != nil {
+		return fmt.Errorf("migrate banned_ips subnet: %w", err)
 	}
 
 	var salt string

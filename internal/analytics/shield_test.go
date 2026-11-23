@@ -210,3 +210,172 @@ analytics:
 		t.Fatalf("expected unbanned IP removed from Caddy file, got:\n%s", string(banBytes3))
 	}
 }
+
+func TestShieldCapLRUSubnetCollapseAndCooldown(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "access.log")
+	banFile := filepath.Join(dir, "bans.caddy")
+	reloadCountFile := filepath.Join(dir, "reloads.txt")
+	reloadScript := filepath.Join(dir, "reload.sh")
+
+	if err := os.WriteFile(reloadScript, []byte("#!/bin/sh\necho x >> "+reloadCountFile+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	yamlText := fmt.Sprintf(`
+db_path: %s
+users:
+  - name: admin
+    token_hash: %s
+    role: admin
+sites:
+  - name: blog
+    repo: https://github.com/example/blog
+    branch: main
+    url: https://xeed.ink
+    script: /bin/true
+analytics:
+  enabled: true
+  db_path: %s
+  caddy_logs: [%q]
+  timezone: Asia/Shanghai
+  shield:
+    enabled: true
+    ban_ttl_hours: 168
+    max_bans: 4
+    subnet_threshold: 3
+    reload_cooldown_sec: 1
+    caddy_ban_file: %q
+    caddy_reload_cmd: [%q]
+    allow_ips: ["198.51.100.77"]
+`, filepath.Join(dir, "deploy.db"), strings.Repeat("a", 64), filepath.Join(dir, "analytics.db"), logPath, banFile, reloadScript)
+
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte(yamlText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := Open(cfg.AnalyticsDBFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	shield := NewShieldManager(cfg, st, nil)
+	ctx := context.Background()
+
+	// Manual ban survives LRU eviction.
+	if _, err := shield.BanManual(ctx, "203.0.113.10", "keep-manual", 24); err != nil {
+		t.Fatal(err)
+	}
+	// Protected CIDR overlapping allow_ips (198.51.100.77) must be refused.
+	if _, err := shield.BanManual(ctx, "198.51.100.0/24", "too-wide", 24); err == nil {
+		t.Fatal("expected BanManual on CIDR overlapping allow_ips to fail")
+	}
+	// Overly broad prefix must be refused.
+	if _, err := shield.BanManual(ctx, "203.0.0.0/8", "way-too-wide", 24); err == nil {
+		t.Fatal("expected BanManual on /8 prefix to fail")
+	}
+
+	// Simulate 3 IPs from 203.0.114.0/24 -> collapses into 203.0.114.0/24 (1 row).
+	now := time.Now()
+	if err := shield.RecordAutoBans(ctx, []ThreatHit{
+		{IP: "203.0.114.1", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Add(-3 * time.Minute).Unix()},
+		{IP: "203.0.114.2", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Add(-2 * time.Minute).Unix()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Because BanManual just ran reload, cooldown=1s skips auto-ban reload right away.
+	reloadsBeforeWait, _ := os.ReadFile(reloadCountFile)
+	if got := strings.Count(string(reloadsBeforeWait), "\n"); got != 1 {
+		t.Fatalf("expected cooldown to defer auto-ban reload (count=1), got %d", got)
+	}
+
+	// Wait past 1s cooldown and add the 3rd IP in 203.0.114.0/24 -> collapses to /24 and reloads!
+	time.Sleep(1100 * time.Millisecond)
+	if err := shield.RecordAutoBans(ctx, []ThreatHit{
+		{IP: "203.0.114.3", Reason: "honeypot", Site: "blog", Path: "/package.json", TS: now.Unix()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reloadsAfterCollapse, _ := os.ReadFile(reloadCountFile)
+	if got := strings.Count(string(reloadsAfterCollapse), "\n"); got != 2 {
+		t.Fatalf("expected reload after cooldown (count=2), got %d", got)
+	}
+
+	banTextBytes, _ := os.ReadFile(banFile)
+	if !strings.Contains(string(banTextBytes), "203.0.114.0/24") || strings.Contains(string(banTextBytes), "203.0.114.1") {
+		t.Fatalf("expected 203.0.114.0/24 collapsed in Caddyfile, got:\n%s", string(banTextBytes))
+	}
+
+	// Hit from another IP in collapsed /24 increments CIDR hits without adding a child row.
+	if err := shield.RecordAutoBans(ctx, []ThreatHit{
+		{IP: "203.0.114.99", Reason: "honeypot", Site: "blog", Path: "/secrets.json", TS: now.Unix() + 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cidrs, err := st.ListBansPage(time.Now(), "203.0.114.0/24", 10, 0)
+	if err != nil || len(cidrs.Rows) != 1 || cidrs.Rows[0].Hits != 4 {
+		t.Fatalf("expected collapsed CIDR hits=4, got %+v (err=%v)", cidrs, err)
+	}
+
+	// 3 IPs in 198.51.100.0/24 (contains allow_ips .77) must NOT collapse to /24.
+	// Also pushes total past max_bans=4 so oldest auto entry gets LRU-evicted while manual stays.
+	if err := shield.RecordAutoBans(ctx, []ThreatHit{
+		{IP: "198.51.100.1", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Unix() + 10},
+		{IP: "198.51.100.2", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Unix() + 11},
+		{IP: "198.51.100.3", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Unix() + 12},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify deferred reload flushes after cooldown via FlushPendingReload.
+	time.Sleep(1100 * time.Millisecond)
+	if err := shield.FlushPendingReload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	reloadsAfterFlush, _ := os.ReadFile(reloadCountFile)
+	if got := strings.Count(string(reloadsAfterFlush), "\n"); got != 3 {
+		t.Fatalf("expected FlushPendingReload to run deferred reload (count=3), got %d", got)
+	}
+
+	allBans, err := st.ListBansPage(time.Now(), "", 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allBans.ActiveCount != 4 {
+		t.Fatalf("expected active_count capped at max_bans=4, got %d (%+v)", allBans.ActiveCount, allBans.Rows)
+	}
+	var hasManual, hasAllowSubnet bool
+	for _, r := range allBans.Rows {
+		if r.IP == "203.0.113.10" && r.Source == "manual" {
+			hasManual = true
+		}
+		if r.IP == "198.51.100.0/24" {
+			hasAllowSubnet = true
+		}
+	}
+	if !hasManual {
+		t.Fatalf("expected manual ban 203.0.113.10 to survive LRU eviction: %+v", allBans.Rows)
+	}
+	if hasAllowSubnet {
+		t.Fatalf("expected subnet containing allow_ips not to collapse to /24: %+v", allBans.Rows)
+	}
+
+	// Verify Unban works on CIDR.
+	if err := shield.RecordAutoBans(ctx, []ThreatHit{
+		{IP: "203.0.115.1", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Unix() + 20},
+		{IP: "203.0.115.2", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Unix() + 21},
+		{IP: "203.0.115.3", Reason: "honeypot", Site: "blog", Path: "/.env", TS: now.Unix() + 22},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := shield.Unban(ctx, "203.0.115.0/24")
+	if err != nil || !removed {
+		t.Fatalf("expected CIDR unban success, removed=%v err=%v", removed, err)
+	}
+}

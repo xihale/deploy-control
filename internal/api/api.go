@@ -566,6 +566,8 @@ func (s *Server) handleAnalyticsBans(w http.ResponseWriter, r *http.Request) {
 		}
 		rep.ShieldEnabled = s.Cfg.Analytics.Shield.Enabled
 		rep.DefaultTTLHrs = s.Cfg.Analytics.Shield.BanTTLHours
+		rep.MaxBans = s.Cfg.ShieldMaxBans()
+		rep.SubnetThreshold = s.Cfg.ShieldSubnetThreshold()
 		writeJSON(w, http.StatusOK, rep)
 
 	case http.MethodPost:

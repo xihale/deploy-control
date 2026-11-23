@@ -292,4 +292,20 @@ analytics:
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"removed":true`) {
 		t.Fatalf("expected unban ok, got %d: %s", rec.Code, rec.Body.String())
 	}
+
+	// Admin can manually ban and unban a /24 CIDR.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/analytics/bans", strings.NewReader(`{"ip":"203.0.116.0/24","reason":"botnet"}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), "203.0.116.0/24") {
+		t.Fatalf("expected 201 for CIDR ban, got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/analytics/bans?ip=203.0.116.0/24", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"removed":true`) {
+		t.Fatalf("expected CIDR unban ok, got %d: %s", rec.Code, rec.Body.String())
+	}
 }

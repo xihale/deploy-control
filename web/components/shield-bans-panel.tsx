@@ -98,10 +98,16 @@ export function ShieldBansPanel() {
             <h2 className="text-sm font-semibold">蜜罐防护与封禁 IP 列表</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">
               封禁中 {formatNumber(data.active_count)}
+              {data.max_bans ? ` / ${formatNumber(data.max_bans)}` : ''}
             </span>
             <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
               默认 {Math.round((data.default_ttl_hours || 168) / 24)} 天
             </span>
+            {data.subnet_threshold ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                同网段 ≥{data.subnet_threshold} 自动合并
+              </span>
+            ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
             命中敏感蜜罐路径（返回诱饵）或漏洞扫描器 UA 后自动全站拦截（403）
@@ -130,8 +136,8 @@ export function ShieldBansPanel() {
           <Input
             value={ipInput}
             onChange={(e) => setIpInput(e.target.value)}
-            placeholder="手动封禁 IP（如 203.0.113.10）"
-            className="h-8 font-mono text-xs sm:w-52"
+            placeholder="手动封禁 IP 或 CIDR（如 203.0.113.10 或 /24）"
+            className="h-8 font-mono text-xs sm:w-64"
           />
           <Input
             value={reasonInput}

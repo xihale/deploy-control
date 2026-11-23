@@ -254,10 +254,25 @@ func TestAnalyticsConfigAndSiteHosts(t *testing.T) {
 	if got := shieldCfg.ShieldBanTTL(); got != 168*time.Hour {
 		t.Fatalf("default shield ban ttl = %v, want 168h", got)
 	}
+	if got := shieldCfg.ShieldMaxBans(); got != 5000 {
+		t.Fatalf("default shield max bans = %d, want 5000", got)
+	}
+	if got := shieldCfg.ShieldSubnetThreshold(); got != 5 {
+		t.Fatalf("default shield subnet threshold = %d, want 5", got)
+	}
+	if got := shieldCfg.ShieldReloadCooldown(); got != 15*time.Second {
+		t.Fatalf("default shield reload cooldown = %v, want 15s", got)
+	}
 
 	badAllow := shieldCfg
 	badAllow.Analytics.Shield.AllowIPs = []string{"bad-cidr"}
 	if err := badAllow.validate(filepath.Join(dir, "config.yaml")); err == nil {
 		t.Fatal("expected invalid shield allow_ips to fail")
+	}
+
+	badCap := shieldCfg
+	badCap.Analytics.Shield.MaxBans = -1
+	if err := badCap.validate(filepath.Join(dir, "config.yaml")); err == nil {
+		t.Fatal("expected negative max_bans to fail")
 	}
 }

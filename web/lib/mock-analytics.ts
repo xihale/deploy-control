@@ -176,6 +176,8 @@ export function mockAnalyticsRequest(
       enabled: true,
       shield_enabled: true,
       default_ttl_hours: 168,
+      max_bans: 5000,
+      subnet_threshold: 5,
       total: filtered.length,
       active_count: mockBans.length,
       rows: filtered.slice(offset, offset + limit),

@@ -132,6 +132,40 @@ func (m *Matcher) isExcludedIP(ipStr string) bool {
 	return matchIPRule(ipStr, m.excludeAddrs, m.excludeCIDRs)
 }
 
+var protectedCIDRs = mustParsePrefixes([]string{
+	"0.0.0.0/8",
+	"10.0.0.0/8",
+	"127.0.0.0/8",
+	"169.254.0.0/16",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"224.0.0.0/4",
+	"240.0.0.0/4",
+	"::/128",
+	"::1/128",
+	"fc00::/7",
+	"fe80::/10",
+	"ff00::/8",
+})
+
+func mustParsePrefixes(list []string) []netip.Prefix {
+	out := make([]netip.Prefix, 0, len(list))
+	for _, s := range list {
+		out = append(out, netip.MustParsePrefix(s))
+	}
+	return out
+}
+
+func unmapPrefix(p netip.Prefix) netip.Prefix {
+	if !p.IsValid() {
+		return p
+	}
+	if p.Addr().Is4In6() && p.Bits() >= 96 {
+		return netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96).Masked()
+	}
+	return p.Masked()
+}
+
 // IsProtectedIP reports whether ipStr must never be banned (loopback, private,
 // link-local, unspecified, exclude_ips, or shield.allow_ips).
 func (m *Matcher) IsProtectedIP(ipStr string) bool {
@@ -145,6 +179,40 @@ func (m *Matcher) IsProtectedIP(ipStr string) bool {
 	}
 	return matchIPRule(addr.String(), m.excludeAddrs, m.excludeCIDRs) ||
 		matchIPRule(addr.String(), m.allowAddrs, m.allowCIDRs)
+}
+
+// IsProtectedPrefix reports whether prefix overlaps any reserved, excluded, or allowlisted IP/CIDR.
+func (m *Matcher) IsProtectedPrefix(p netip.Prefix) bool {
+	p = unmapPrefix(p)
+	if !p.IsValid() || p.Addr().IsUnspecified() {
+		return true
+	}
+	for _, rp := range protectedCIDRs {
+		if p.Overlaps(rp) {
+			return true
+		}
+	}
+	for _, a := range m.excludeAddrs {
+		if p.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	for _, rp := range m.excludeCIDRs {
+		if p.Overlaps(unmapPrefix(rp)) {
+			return true
+		}
+	}
+	for _, a := range m.allowAddrs {
+		if p.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	for _, rp := range m.allowCIDRs {
+		if p.Overlaps(unmapPrefix(rp)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Matcher) isExcludedPath(p string) bool {

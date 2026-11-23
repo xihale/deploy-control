@@ -64,6 +64,9 @@ sites:
 #   shield:
 #     enabled: true
 #     ban_ttl_hours: 168            # 7 days
+#     max_bans: 5000                # LRU cap for auto-bans
+#     subnet_threshold: 5           # collapse >=5 IPs in same /24 or /64 into CIDR
+#     reload_cooldown_sec: 15       # throttle auto-ban Caddy reloads
 #     caddy_ban_file: /etc/caddy/bans.caddy
 #     caddy_reload_cmd: ["systemctl", "reload", "caddy"]
 #     exclude_php_sites: [fresh]
