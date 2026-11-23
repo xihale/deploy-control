@@ -25,7 +25,7 @@ analytics:
   retention_days: 365
   ignore_bots: true
   exclude_paths: [/api/, /webhook/, /healthz]
-  exclude_ips: [127.0.0.1, ::1]
+  exclude_ips: ["127.0.0.1", "::1"]
 
 users:
   - name: xihale
