@@ -117,6 +117,13 @@ sites:
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: mintcal-ci
+  - name: class-relay
+    repo: https://github.com/xihale/class-relay
+    branch: main
+    url: https://cr.xeed.ink
+    script: /var/lib/deployd/scripts/run-site
+    webhook_secret: <secret>
+    run_as: class-relay-ci
   # deploy-control itself (self-bootstrap); no run_as: runs as the service
   # user (root) because it installs the binary and restarts the service.
   - name: deploy-control

@@ -1,0 +1,42 @@
+# class-relay — cr.xeed.ink. Runs as class-relay-ci (login shell /bin/sh — the
+# runner's bash shebang is what matters), cwd = checked-out worktree
+# (DEPLOY_COMMIT).
+#   1. Go toolchain bootstrap (gx has no system go)
+#   2. go build ./cmd/class-relay → ~/.local/bin/class-relay.new (static assets embedded)
+#   3. systemctl --user restart class-relay; Caddy proxies cr.xeed.ink → :3003
+site=class-relay
+
+prepare() {
+	go_env 1.26.5 # must be >= go.mod's go directive
+	user_bus_env  # deployd spawns us without a login session
+}
+
+build() {
+	mkdir -p "$HOME/.local/bin"
+	"$GO" build -trimpath -ldflags='-s -w' -o "$HOME/.local/bin/class-relay.new" ./cmd/class-relay
+}
+
+publish() {
+	local BIN="$HOME/.local/bin/class-relay"
+	if [ -f "$BIN" ]; then cp "$BIN" "$BIN.prev"; fi # one-shot rollback copy
+	mv "$BIN.new" "$BIN"
+	mkdir -p "$HOME/.config/systemd/user"
+	cat scripts/server/class-relay.service > "$HOME/.config/systemd/user/class-relay.service"
+	systemctl --user daemon-reload
+	systemctl --user enable --now class-relay
+	systemctl --user restart class-relay
+	local up=0 n
+	for n in $(seq 1 30); do
+		if curl -fsS -m 2 -o /dev/null http://127.0.0.1:3003/healthz; then up=1; break; fi
+		sleep 0.5
+	done
+	if [ "$up" != 1 ]; then
+		if [ -f "$BIN.prev" ]; then
+			say "service did not come up — rolling back to previous binary"
+			cp "$BIN.prev" "$BIN"
+			systemctl --user restart class-relay
+		fi
+		die "class-relay not healthy on 127.0.0.1:3003/healthz after restart"
+	fi
+	say "published ${SHA:0:7} → $BIN (class-relay active, :3003 healthy)"
+}
