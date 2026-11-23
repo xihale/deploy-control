@@ -99,66 +99,66 @@ function DeltaBadge({ curr, prev }: { curr: number; prev: number }) {
 
 function SummaryCards({ summary, isAll }: { summary: AnalyticsSummary; isAll: boolean }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      <div className="rounded-2xl border bg-card p-4 space-y-1.5">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-5">
+      <div className="col-span-2 rounded-2xl border bg-card p-3.5 space-y-1.5 sm:p-4 lg:col-span-1">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{isAll ? '今日全站日活 (去重 DAU)' : '今日日活 (DAU)'}</span>
-          <UsersIcon className="size-3.5 text-ok" />
+          <UsersIcon className="size-3.5 shrink-0 text-ok" />
         </div>
-        <div className="font-mono text-2xl font-semibold tabular-nums">
+        <div className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
           {formatNumber(summary.today_dau)}
         </div>
         <DeltaBadge curr={summary.today_dau} prev={summary.yesterday_dau} />
       </div>
 
-      <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="rounded-2xl border bg-card p-3.5 space-y-1.5 sm:p-4">
+        <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
           <span>区间独立访客 (UV)</span>
-          <UsersIcon className="size-3.5 opacity-60" />
+          <UsersIcon className="size-3.5 shrink-0 opacity-60" />
         </div>
-        <div className="font-mono text-2xl font-semibold tabular-nums">
+        <div className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
           {formatNumber(summary.range_uv)}
         </div>
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="font-mono text-[11px] text-muted-foreground sm:text-xs">
           7日 {formatNumber(summary.wau)} · 30日 {formatNumber(summary.mau)}
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="rounded-2xl border bg-card p-3.5 space-y-1.5 sm:p-4">
+        <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
           <span>区间浏览量 (PV)</span>
-          <EyeIcon className="size-3.5 text-run" />
+          <EyeIcon className="size-3.5 shrink-0 text-run" />
         </div>
-        <div className="font-mono text-2xl font-semibold tabular-nums">
+        <div className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
           {formatNumber(summary.range_pv)}
         </div>
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="font-mono text-[11px] text-muted-foreground sm:text-xs">
           今日 {formatNumber(summary.today_pv)} · 人均 {summary.pv_per_uv.toFixed(2)} 页
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="rounded-2xl border bg-card p-3.5 space-y-1.5 sm:p-4">
+        <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
           <span>总请求与流量</span>
-          <HardDriveIcon className="size-3.5 text-wait" />
+          <HardDriveIcon className="size-3.5 shrink-0 text-wait" />
         </div>
-        <div className="font-mono text-2xl font-semibold tabular-nums">
+        <div className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
           {formatBytes(summary.range_bytes)}
         </div>
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="font-mono text-[11px] text-muted-foreground sm:text-xs">
           {formatNumber(summary.range_requests)} 请求 · 均耗 {formatMs(summary.avg_duration_ms)}
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-card p-4 space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="rounded-2xl border bg-card p-3.5 space-y-1.5 sm:p-4">
+        <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
           <span>深度访问与异常/爬虫</span>
-          <ShieldAlertIcon className="size-3.5 opacity-60" />
+          <ShieldAlertIcon className="size-3.5 shrink-0 opacity-60" />
         </div>
-        <div className="font-mono text-2xl font-semibold tabular-nums">
+        <div className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
           {summary.engaged_rate.toFixed(1)}%
         </div>
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="font-mono text-[11px] text-muted-foreground sm:text-xs">
           <span className={summary.err_5xx > 0 ? 'text-bad' : undefined}>
             4xx/5xx {summary.err_4xx}/{summary.err_5xx}
           </span>{' '}
@@ -260,24 +260,24 @@ function SitesCompareTable({
 
   return (
     <section className="rounded-2xl border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 sm:py-3.5">
         <div>
           <h2 className="text-sm font-semibold">各站点综合数据表</h2>
           <p className="text-xs text-muted-foreground">
             点击任意站点行可进入单站深度分析与维度明细
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:flex-initial">
             <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="筛选站点或域名…"
-              className="h-8 w-44 pl-8 text-xs"
+              className="h-8 w-full pl-8 text-xs sm:w-44"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={onExport}>
+          <Button variant="outline" size="sm" onClick={onExport} className="shrink-0">
             <DownloadIcon className="size-3.5" />
             导出 CSV
           </Button>
@@ -288,12 +288,13 @@ function SitesCompareTable({
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b bg-muted/35 text-muted-foreground">
-              {cols.map((c) => (
+              {cols.map((c, idx) => (
                 <th
                   key={c.key}
                   className={cn(
-                    'whitespace-nowrap px-3.5 py-2.5 font-medium',
+                    'whitespace-nowrap px-3 py-2.5 font-medium sm:px-3.5',
                     c.align !== 'left' && 'text-right',
+                    idx === 0 && 'sticky left-0 z-20 bg-card shadow-[inset_-1px_0_0_var(--border)] sm:static sm:bg-transparent sm:shadow-none',
                   )}
                 >
                   <button
@@ -323,11 +324,11 @@ function SitesCompareTable({
                 <tr
                   key={s.site}
                   onClick={() => onSelectSite(s.site)}
-                  className="cursor-pointer transition-colors hover:bg-muted/40"
+                  className="group cursor-pointer transition-colors hover:bg-muted/40"
                 >
-                  <td className="whitespace-nowrap px-3.5 py-2.5">
-                    <div className="font-medium text-foreground">{s.site}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground">
+                  <td className="sticky left-0 z-10 max-w-[8rem] whitespace-nowrap bg-card px-3 py-2.5 shadow-[inset_-1px_0_0_var(--border)] group-hover:bg-muted/40 sm:static sm:max-w-none sm:bg-transparent sm:px-3.5 sm:shadow-none">
+                    <div className="truncate font-medium text-foreground">{s.site}</div>
+                    <div className="truncate font-mono text-[11px] text-muted-foreground">
                       {s.hosts[0] ?? (s.url ? siteUrlLabel(s.url) : '未绑定域名')}
                     </div>
                   </td>
@@ -443,7 +444,7 @@ function DailyBreakdownTable({
 
   return (
     <section className="rounded-2xl border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 sm:py-3.5">
         <h2 className="text-sm font-semibold">{title}</h2>
         <Button variant="outline" size="sm" onClick={onExport}>
           <DownloadIcon className="size-3.5" />
@@ -452,14 +453,15 @@ function DailyBreakdownTable({
       </div>
       <div className="max-h-96 overflow-auto">
         <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-card shadow-[inset_0_-1px_0_var(--border)]">
+          <thead className="sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_var(--border)]">
             <tr className="bg-muted/35 text-muted-foreground">
-              {cols.map((c) => (
+              {cols.map((c, idx) => (
                 <th
                   key={c.key}
                   className={cn(
-                    'whitespace-nowrap px-3.5 py-2.5 font-medium',
+                    'whitespace-nowrap px-3 py-2.5 font-medium sm:px-3.5',
                     c.align !== 'left' && 'text-right',
+                    idx === 0 && 'sticky left-0 z-30 bg-card shadow-[inset_-1px_-1px_0_var(--border)] sm:static sm:bg-transparent sm:shadow-none',
                   )}
                 >
                   <button
@@ -479,8 +481,8 @@ function DailyBreakdownTable({
           </thead>
           <tbody className="divide-y">
             {sorted.map((r) => (
-              <tr key={r.day} className="hover:bg-muted/30">
-                <td className="whitespace-nowrap px-3.5 py-2 font-mono font-medium">
+              <tr key={r.day} className="group hover:bg-muted/30">
+                <td className="sticky left-0 z-10 whitespace-nowrap bg-card px-3 py-2 font-mono font-medium shadow-[inset_-1px_0_0_var(--border)] group-hover:bg-muted/30 sm:static sm:bg-transparent sm:px-3.5 sm:shadow-none">
                   {r.day}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-2 text-right font-mono tabular-nums">
@@ -602,7 +604,7 @@ function DimensionBreakdownTable({
 
   return (
     <section className="rounded-2xl border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 sm:py-3.5">
         <div className="flex flex-wrap gap-1.5">
           {DIMENSIONS.map((d) => {
             const Icon = d.icon
@@ -612,7 +614,7 @@ function DimensionBreakdownTable({
                 type="button"
                 onClick={() => switchDim(d.value)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors',
+                  'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition-colors sm:px-3',
                   dim === d.value
                     ? 'border-foreground bg-foreground text-background'
                     : 'text-muted-foreground hover:border-foreground/30 hover:text-foreground',
@@ -625,8 +627,8 @@ function DimensionBreakdownTable({
           })}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:flex-initial">
             <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -635,10 +637,10 @@ function DimensionBreakdownTable({
                 setPage(0)
               }}
               placeholder="搜索维度项…"
-              className="h-8 w-44 pl-8 text-xs"
+              className="h-8 w-full pl-8 text-xs sm:w-44"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={handleExport} className="shrink-0">
             <DownloadIcon className="size-3.5" />
             导出 CSV
           </Button>
@@ -731,12 +733,12 @@ function DimensionBreakdownTable({
               ) : (
                 data?.rows.map((r) => (
                   <tr key={r.key} className="hover:bg-muted/30">
-                    <td className="max-w-xs truncate px-4 py-2 font-mono" title={r.key}>
+                    <td className="max-w-[10.5rem] truncate px-3.5 py-2 font-mono sm:max-w-xs sm:px-4" title={r.key}>
                       {r.key}
                     </td>
-                    <td className="whitespace-nowrap px-3.5 py-2 text-right">
+                    <td className="whitespace-nowrap px-3 py-2 text-right sm:px-3.5">
                       <div className="inline-flex items-center gap-2">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                        <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-muted sm:block">
                           <div
                             className="h-full rounded-full bg-run/75"
                             style={{ width: `${Math.min(100, Math.max(2, r.share))}%` }}
@@ -910,23 +912,35 @@ export function AnalyticsView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={activeSite}
-            onChange={(e) => selectSite(e.target.value)}
-            aria-label="选择站点"
-            className="h-8 rounded-lg border bg-card px-2.5 text-xs text-foreground outline-none focus-visible:border-ring"
-          >
-            <option value="_all">全部站点（综合）</option>
-            {sites.data?.map((s) => (
-              <option key={s.name} value={s.name}>
-                {s.name}
-                {s.url ? ` (${siteUrlLabel(s.url)})` : ''}
-              </option>
-            ))}
-          </select>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex items-center gap-2 sm:contents">
+            <select
+              value={activeSite}
+              onChange={(e) => selectSite(e.target.value)}
+              aria-label="选择站点"
+              className="h-8 min-w-0 flex-1 rounded-lg border bg-card px-2.5 text-xs text-foreground outline-none focus-visible:border-ring sm:w-auto sm:flex-initial"
+            >
+              <option value="_all">全部站点（综合）</option>
+              {sites.data?.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name}
+                  {s.url ? ` (${siteUrlLabel(s.url)})` : ''}
+                </option>
+              ))}
+            </select>
 
-          <div className="flex rounded-full border bg-muted/40 p-0.5 text-xs">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => activeQuery.mutate()}
+              title="刷新数据"
+              className="shrink-0 sm:order-last"
+            >
+              <RefreshCwIcon className="size-3.5" />
+            </Button>
+          </div>
+
+          <div className="flex w-full rounded-full border bg-muted/40 p-0.5 text-xs sm:w-auto">
             {RANGES.map((r) => {
               const active = !from && !to && range === r.value
               return (
@@ -935,7 +949,7 @@ export function AnalyticsView() {
                   type="button"
                   onClick={() => applyPreset(r.value)}
                   className={cn(
-                    'rounded-full px-2.5 py-1 transition-colors',
+                    'flex-1 whitespace-nowrap rounded-full px-2.5 py-1 text-center transition-colors sm:flex-initial',
                     active
                       ? 'bg-background font-medium text-foreground shadow-xs'
                       : 'text-muted-foreground hover:text-foreground',
@@ -947,32 +961,23 @@ export function AnalyticsView() {
             })}
           </div>
 
-          <div className="flex items-center gap-1 text-xs">
+          <div className="flex w-full items-center gap-1.5 text-xs sm:w-auto">
             <input
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
               aria-label="开始日期"
-              className="h-8 rounded-lg border bg-card px-2 font-mono text-xs"
+              className="h-8 min-w-0 flex-1 rounded-lg border bg-card px-2 font-mono text-xs sm:w-auto sm:flex-initial"
             />
-            <span className="text-muted-foreground">~</span>
+            <span className="shrink-0 text-muted-foreground">~</span>
             <input
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
               aria-label="结束日期"
-              className="h-8 rounded-lg border bg-card px-2 font-mono text-xs"
+              className="h-8 min-w-0 flex-1 rounded-lg border bg-card px-2 font-mono text-xs sm:w-auto sm:flex-initial"
             />
           </div>
-
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => activeQuery.mutate()}
-            title="刷新数据"
-          >
-            <RefreshCwIcon className="size-3.5" />
-          </Button>
         </div>
       </div>
 

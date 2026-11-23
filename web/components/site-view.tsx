@@ -150,7 +150,7 @@ export function SiteView() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{name}</h1>
           {site && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5 font-mono">
@@ -193,8 +193,8 @@ export function SiteView() {
       </div>
 
       {analytics.data?.enabled && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card px-5 py-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-3.5 sm:gap-4 sm:px-5 sm:py-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:gap-x-6">
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <BarChart3Icon className="size-4 text-ok" />
               访问概览
@@ -253,7 +253,7 @@ export function SiteView() {
                   setPage(0)
                 }}
                 className={cn(
-                  'flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm transition-colors',
+                  'flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition-colors sm:px-3.5 sm:text-sm',
                   active
                     ? 'bg-foreground text-background'
                     : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',

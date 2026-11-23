@@ -17,7 +17,7 @@ function HealthPill() {
 
   return (
     <div
-      className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground"
+      className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground sm:gap-2 sm:px-3 sm:py-1.5"
       title={offline ? 'API 无响应' : 'API 正常'}
     >
       <span
@@ -52,17 +52,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex items-center gap-5">
-            <Link href="/" className="flex items-center gap-2.5">
-              <Logo className="size-7" />
-              <span className="text-sm font-semibold tracking-tight">部署控制台</span>
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-5">
+            <Link href="/" className="flex shrink-0 items-center gap-2.5">
+              <Logo className="size-7 shrink-0" />
+              <span className="hidden whitespace-nowrap text-sm font-semibold tracking-tight sm:inline">
+                部署控制台
+              </span>
             </Link>
-            <nav aria-label="主导航" className="flex items-center gap-1 text-xs">
+            <nav aria-label="主导航" className="flex shrink-0 items-center gap-1 text-xs">
               <Link
                 href="/"
                 className={cn(
-                  'rounded-full px-3 py-1.5 transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 transition-colors sm:px-3',
                   !isAnalytics
                     ? 'bg-muted font-medium text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
@@ -73,20 +75,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 href="/analytics"
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors',
+                  'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 transition-colors sm:px-3',
                   isAnalytics
                     ? 'bg-muted font-medium text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <BarChart3Icon className="size-3.5" />
+                <BarChart3Icon className="size-3.5 shrink-0" />
                 访问统计
               </Link>
             </nav>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {isDemo && (
-              <span className="rounded-full bg-wait/15 px-2.5 py-1 text-xs font-medium text-wait">
+              <span className="shrink-0 whitespace-nowrap rounded-full bg-wait/15 px-2 py-0.5 text-[11px] font-medium text-wait sm:px-2.5 sm:py-1 sm:text-xs">
                 演示数据
               </span>
             )}
@@ -108,13 +110,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={logout}
               aria-label="退出登录"
               title="退出登录"
+              className="shrink-0"
             >
               <LogOutIcon />
             </Button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      <main className="mx-auto max-w-5xl px-3.5 py-5 sm:px-6 sm:py-10">
         {children}
       </main>
     </div>

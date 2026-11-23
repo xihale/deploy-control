@@ -33,34 +33,43 @@ export function DeployRow({
   return (
     <Link
       href={`/deploy?id=${job.id}`}
-      className="group surface flex items-center gap-4 rounded-xl border bg-card px-4 py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group surface flex items-center gap-3 rounded-xl border bg-card px-3.5 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:gap-4 sm:px-4 sm:py-3.5"
     >
-      <StatusBadge status={job.status} className="w-[5.5rem] shrink-0 justify-center" />
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {showSite && (
-          <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-            {job.site}
+      <StatusBadge status={job.status} className="w-[4.75rem] shrink-0 justify-center sm:w-[5.5rem]" />
+      <div className="min-w-0 flex-1 space-y-1 sm:flex sm:items-center sm:gap-3 sm:space-y-0">
+        <div className="flex min-w-0 items-center gap-2 sm:shrink-0">
+          {showSite && (
+            <span className="max-w-[9.5rem] truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:max-w-none sm:shrink-0">
+              {job.site}
+            </span>
+          )}
+          <span className="shrink-0 font-mono text-sm font-medium tabular-nums">#{job.id}</span>
+        </div>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex-1 sm:gap-3 sm:text-sm">
+          <span
+            className="flex shrink-0 items-center text-muted-foreground"
+            title={triggerLabel}
+          >
+            <TriggerIcon className="size-3.5 sm:size-4" />
+            <span className="sr-only">{triggerLabel}</span>
           </span>
-        )}
-        <span className="font-mono text-sm font-medium tabular-nums">#{job.id}</span>
-        <span
-          className="flex items-center gap-1.5 text-muted-foreground"
-          title={triggerLabel}
-        >
-          <TriggerIcon className="size-4" />
-          <span className="sr-only">{triggerLabel}</span>
-        </span>
-        <span className="truncate font-mono text-sm text-muted-foreground">
-          {sha ?? job.branch}
-        </span>
+          <span className="truncate font-mono">
+            {sha ?? job.branch}
+          </span>
+          {duration && (
+            <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80 tabular-nums sm:hidden">
+              · {duration}
+            </span>
+          )}
+        </div>
       </div>
-      <span className="hidden font-mono text-xs text-muted-foreground tabular-nums sm:block">
+      <span className="hidden shrink-0 font-mono text-xs text-muted-foreground tabular-nums sm:block">
         {duration ?? ''}
       </span>
-      <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
+      <span className="shrink-0 whitespace-nowrap text-right text-xs text-muted-foreground sm:w-16">
         {timeAgo(job.created_at)}
       </span>
-      <ChevronRightIcon className="size-4 text-muted-foreground/50 transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5" />
+      <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/50 transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5" />
     </Link>
   )
 }

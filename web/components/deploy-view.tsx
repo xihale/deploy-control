@@ -75,7 +75,7 @@ function Timeline({ job }: { job: DeployJob }) {
             {!last && (
               <span
                 className={cn(
-                  'mx-3 mb-9 h-0.5 flex-1 rounded-full',
+                  'mx-2 mb-9 h-0.5 flex-1 rounded-full sm:mx-3',
                   steps[i + 1].at ? 'bg-foreground/80' : 'bg-muted',
                 )}
               />
@@ -116,7 +116,7 @@ function RedeployButton({ job }: { job: DeployJob }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-start gap-1 sm:items-end">
       <Button
         variant="outline"
         size="lg"
@@ -128,7 +128,7 @@ function RedeployButton({ job }: { job: DeployJob }) {
         重新部署
       </Button>
       {error && (
-        <span role="alert" className="max-w-56 text-right text-xs text-bad">
+        <span role="alert" className="max-w-56 text-left text-xs text-bad sm:text-right">
           {error}
         </span>
       )}
@@ -197,7 +197,7 @@ export function DeployView() {
         </p>
       )}
 
-      <div className="space-y-8 rounded-2xl border bg-card p-6">
+      <div className="space-y-6 rounded-2xl border bg-card p-4 sm:space-y-8 sm:p-6">
         <Timeline job={job} />
         <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-t pt-6 sm:grid-cols-4">
           <Fact label="触发">

@@ -45,7 +45,7 @@ function SiteCard({
   return (
     <article
       className={cn(
-        'group surface relative flex flex-col gap-4 rounded-2xl border bg-card p-5',
+        'group surface relative flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:p-5',
         latest?.status === 'failed' && 'border-bad/40',
       )}
     >
@@ -239,7 +239,7 @@ export function Overview() {
     <div className="space-y-8">
       <div className="space-y-5">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="flex items-baseline gap-3 text-3xl font-semibold tracking-tight">
+          <h1 className="flex items-baseline gap-3 text-2xl font-semibold tracking-tight sm:text-3xl">
             站点
             <span className="font-mono text-xl font-normal text-muted-foreground tabular-nums">
               {sites.data.length}
@@ -248,7 +248,7 @@ export function Overview() {
           {analytics.data?.enabled && (
             <Link
               href="/analytics"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               全站今日 DAU{' '}
               <strong className="font-mono text-foreground tabular-nums">

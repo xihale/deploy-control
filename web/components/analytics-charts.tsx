@@ -99,9 +99,9 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
   }
 
   return (
-    <section className="rounded-2xl border bg-card p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+    <section className="rounded-2xl border bg-card p-3.5 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground sm:gap-4">
           <span className="text-sm font-semibold text-foreground">访问趋势</span>
           {mode === 'traffic' ? (
             <>
@@ -128,11 +128,11 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
           )}
         </div>
 
-        <div className="flex rounded-full border bg-muted/50 p-0.5 text-xs">
+        <div className="flex shrink-0 rounded-full border bg-muted/50 p-0.5 text-xs">
           <button
             type="button"
             onClick={() => setMode('traffic')}
-            className={`rounded-full px-2.5 py-1 transition-colors ${
+            className={`whitespace-nowrap rounded-full px-2.5 py-1 transition-colors ${
               mode === 'traffic'
                 ? 'bg-background font-medium text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
@@ -143,7 +143,7 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
           <button
             type="button"
             onClick={() => setMode('requests')}
-            className={`rounded-full px-2.5 py-1 transition-colors ${
+            className={`whitespace-nowrap rounded-full px-2.5 py-1 transition-colors ${
               mode === 'requests'
                 ? 'bg-background font-medium text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
@@ -154,11 +154,11 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
         </div>
       </div>
 
-      <div className="h-56 w-full">
+      <div className="h-52 w-full sm:h-56">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <ComposedChart
             data={series}
-            margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+            margin={{ top: 8, right: 2, left: -4, bottom: 0 }}
           >
             <CartesianGrid
               stroke="var(--border)"
@@ -175,6 +175,7 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
             />
             <YAxis
               yAxisId="left"
+              width={32}
               tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
               axisLine={false}
               tickLine={false}
@@ -189,7 +190,7 @@ export function DailyTrendChart({ series }: { series: AnalyticsDailyPoint[] }) {
               tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
               axisLine={false}
               tickLine={false}
-              width={mode === 'traffic' ? 42 : 58}
+              width={mode === 'traffic' ? 34 : 48}
               allowDecimals={false}
             />
             <Tooltip
@@ -252,17 +253,17 @@ export function HourlyBarChart({ hourly }: { hourly: AnalyticsHourlyPoint[] }) {
   if (hourly.length === 0) return null
 
   return (
-    <section className="rounded-2xl border bg-card p-5">
+    <section className="rounded-2xl border bg-card p-3.5 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">近 24 小时分时 PV</span>
         <span className="text-xs text-muted-foreground">按小时聚合</span>
       </div>
 
-      <div className="h-56 w-full">
+      <div className="h-52 w-full sm:h-56">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart
             data={hourly}
-            margin={{ top: 8, right: 6, left: -18, bottom: 0 }}
+            margin={{ top: 8, right: 4, left: -6, bottom: 0 }}
           >
             <CartesianGrid
               stroke="var(--border)"
@@ -278,6 +279,7 @@ export function HourlyBarChart({ hourly }: { hourly: AnalyticsHourlyPoint[] }) {
               interval={5}
             />
             <YAxis
+              width={32}
               tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
               axisLine={false}
               tickLine={false}
@@ -334,7 +336,7 @@ export function BotBreakdownChart({
   if (rows.length === 0) return null
 
   return (
-    <section className="rounded-2xl border bg-card p-5">
+    <section className="rounded-2xl border bg-card p-3.5 sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">爬虫 / Bot 流量构成 (Top 8)</h2>
@@ -344,12 +346,12 @@ export function BotBreakdownChart({
         </div>
       </div>
 
-      <div className="h-56 w-full">
+      <div className="h-60 w-full sm:h-56">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart
             data={rows.slice(0, 8)}
             layout="vertical"
-            margin={{ top: 4, right: 20, left: 10, bottom: 0 }}
+            margin={{ top: 4, right: 12, left: 0, bottom: 0 }}
           >
             <CartesianGrid
               stroke="var(--border)"
@@ -366,7 +368,8 @@ export function BotBreakdownChart({
             <YAxis
               type="category"
               dataKey="key"
-              width={145}
+              width={116}
+              tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
               tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
               axisLine={false}
               tickLine={false}
