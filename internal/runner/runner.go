@@ -236,12 +236,12 @@ func (r *Runner) prepareWorktree(ctx context.Context, site config.Site, workDir,
 		if err != nil {
 			return "", fmt.Errorf("clone: %w; attempts: %s", err, strings.Join(res.Attempts, " | "))
 		}
-	}
-
-	res, err := r.Fetch.Fetch(ctx, workDir, site.Repo, runAs)
-	logAttempts(logw, "fetch", res)
-	if err != nil {
-		return "", fmt.Errorf("fetch: %w; attempts: %s", err, strings.Join(res.Attempts, " | "))
+	} else {
+		res, err := r.Fetch.Fetch(ctx, workDir, site.Repo, runAs)
+		logAttempts(logw, "fetch", res)
+		if err != nil {
+			return "", fmt.Errorf("fetch: %w; attempts: %s", err, strings.Join(res.Attempts, " | "))
+		}
 	}
 
 	if sha != "" {

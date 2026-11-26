@@ -1,6 +1,7 @@
 // Package fetcher implements the unified git fetch policy:
-// attempt 1 always forced direct, attempts 2-5 over HTTPS through the proxy,
-// SSH remotes always direct. Never reports success without git exit 0.
+// HTTPS remotes try the configured proxy first (attempts 1-4) and fall back
+// to direct on the final attempt (attempt 5); SSH remotes always stay direct.
+// Never reports success without git exit 0.
 //
 // Every git operation runs as the site's run_as CI user (sudo -n -H -u)
 // with a scrubbed environment, so worktrees contain no root-owned files and
@@ -21,12 +22,12 @@ import (
 // DefaultProxy is the unified proxy endpoint for HTTPS fetches.
 const DefaultProxy = "http://127.0.0.1:7654"
 
-// Attempts is the fixed attempt count: 1 direct + 4 proxied-or-direct.
+// Attempts is the fixed attempt count: 4 proxied + 1 direct fallback (or 5 direct).
 const Attempts = 5
 
 const (
 	// AttemptTimeout bounds one fetch attempt. Fetches transfer deltas.
-	AttemptTimeout = 60 * time.Second
+	AttemptTimeout = 30 * time.Second
 	// CloneTimeout bounds one clone attempt. The first clone transfers the
 	// whole packed repository (and checks out the full tree), and gx→GitHub
 	// throughput measured ~27 KB/s; a 12 MB site repo needs ~8 minutes.
@@ -70,20 +71,15 @@ func (f *Fetcher) logf(format string, args ...any) {
 // attemptArgs builds the git argv for attempt i (0-based) given the remote URL.
 // The -c config overrides go BEFORE the subcommand: git accepts them only as
 // global options, and appending after the subcommand is a usage error.
-// Attempt 0 is forced direct: proxy vars scrubbed from env AND empty -c values
-// override any repo/global git-config http.proxy / https.proxy.
-// Attempts 1-4 on HTTPS remotes add explicit -c http.proxy/-c https.proxy;
+// On HTTPS remotes with a configured proxy, attempts 0..(Attempts-2) use
+// explicit -c http.proxy/-c https.proxy, and the final attempt (Attempts-1)
+// falls back to direct (proxy env vars scrubbed + empty -c overrides).
 // SSH remotes always run direct (SSH is not proxied; we say so, never claim it).
 func (f *Fetcher) attemptArgs(remoteURL string, attempt int, base []string) (args []string, env []string, desc string) {
 	env = scrubEnv(os.Environ())
 	isHTTPS := strings.HasPrefix(remoteURL, "https://") || strings.HasPrefix(remoteURL, "http://")
 	args = []string{"git"}
-	if attempt == 0 {
-		args = append(args, "-c", "http.proxy=", "-c", "https.proxy=")
-		args = append(args, base...)
-		return args, env, "direct"
-	}
-	if isHTTPS && f.Proxy != "" {
+	if isHTTPS && f.Proxy != "" && attempt < Attempts-1 {
 		args = append(args, "-c", "http.proxy="+f.Proxy, "-c", "https.proxy="+f.Proxy)
 		args = append(args, base...)
 		return args, env, "proxy " + f.Proxy
@@ -241,13 +237,13 @@ func outcome(err error) string {
 func backoff(attempt int) time.Duration {
 	switch attempt {
 	case 0:
-		return 2 * time.Second
+		return 1 * time.Second
 	case 1:
-		return 4 * time.Second
+		return 2 * time.Second
 	case 2:
-		return 8 * time.Second
+		return 4 * time.Second
 	default:
-		return 15 * time.Second
+		return 8 * time.Second
 	}
 }
 
@@ -266,5 +262,5 @@ func (f *Fetcher) DescribeRemote(remoteURL string) string {
 	if f.Proxy == "" {
 		return "https: direct retries only (proxy disabled)"
 	}
-	return "https: 1 direct + 4 via " + f.Proxy
+	return "https: 4 via " + f.Proxy + " + 1 direct"
 }

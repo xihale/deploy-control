@@ -11,7 +11,7 @@
 | `internal/store/store.go` | SQLite（`modernc.org/sqlite`）任务/delivery 持久化与恢复 |
 | `internal/analytics/{parser,store,ingestor,shield}.go` | Caddy JSON 访问日志增量采集、隐私去重 DAU/WAU/MAU 聚合（`analytics.db`）、蜜罐自动封禁同步 Caddy 与维度查询 |
 | `internal/dispatch/dispatch.go` | 同站串行、全局有限并发调度队列 |
-| `internal/fetcher/{fetcher,git}.go` | 5 次统一拉取策略（首次强直连，HTTPS 重试走代理，SSH 永直连） |
+| `internal/fetcher/{fetcher,git}.go` | 5 次统一拉取策略（HTTPS 优先走代理、末次直连兜底，SSH 永直连） |
 | `internal/runner/{runner,exec}.go` | 站点脚本执行（注入 `DEPLOY_*` 环境变量、可选 `run_as` `sudo -n -H -u` 与日志落盘） |
 | `internal/webhook/github.go` | GitHub `push` / `release` Webhook HMAC-SHA256 验签与 delivery 去重 |
 | `internal/api/api.go` & `internal/webui/webui.go` | Token 鉴权 REST API（含 `/api/analytics/*`）与 `web_dir` 静态产物同源托管 |

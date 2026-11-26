@@ -13,7 +13,7 @@ deploy_timeout_sec: 3600   # zig compiler source-build fallback can be slow
 
 fetch:
   # snirect SNI-rewrite proxy (root user service, 127.0.0.1:7654).
-  # Attempt 1 always direct; HTTPS retries 2-5 via proxy; SSH remotes direct.
+  # HTTPS remotes try proxy first (attempts 1-4) and fall back to direct (attempt 5); SSH remotes direct.
   proxy: http://127.0.0.1:7654
 
 analytics:

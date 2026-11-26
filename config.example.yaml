@@ -14,10 +14,10 @@ deploy_timeout_sec: 1800         # hard per-deploy timeout; script killed, job f
 
 fetch:
   # Unified fetch policy, enforced by the service:
-  #   attempt 1: forced direct (proxy env vars scrubbed in both cases AND
+  #   attempts 1-4: HTTPS remotes via this proxy; SSH remotes stay direct
+  #                 (SSH is never proxied and is never reported as proxied)
+  #   attempt 5: direct fallback (proxy env vars scrubbed AND
   #              `-c http.proxy= -c https.proxy=` overrides repo/global git config)
-  #   attempts 2-5: HTTPS remotes via this proxy; SSH remotes stay direct
-  #               (SSH is never proxied and is never reported as proxied)
   # Set to "none" to disable proxy attempts entirely.
   proxy: http://127.0.0.1:7654
 

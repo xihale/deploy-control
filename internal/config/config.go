@@ -46,8 +46,8 @@ type Site struct {
 	compiledRefRegex *regexp.Regexp
 }
 
-// Fetch holds the unified fetch policy. Attempt 1 is always forced direct;
-// HTTPS remotes then retry through the proxy; SSH remotes stay direct.
+// Fetch holds the unified fetch policy. HTTPS remotes try the proxy first
+// (attempts 1-4) and fall back to direct on the final attempt; SSH remotes stay direct.
 type Fetch struct {
 	Proxy string `yaml:"proxy"`
 }

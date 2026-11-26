@@ -36,39 +36,47 @@ func TestAttemptArgsProxyPolicy(t *testing.T) {
 	f := &Fetcher{Proxy: DefaultProxy}
 	base := []string{"fetch", "--prune", "origin"}
 
-	// Attempt 0: forced direct — empty -c overrides, and they must come
-	// BEFORE the subcommand (git rejects -c after it).
-	args, env, desc := f.attemptArgs("https://github.com/x/y", 0, base)
-	if desc != "direct" {
-		t.Fatalf("attempt 0 desc = %q, want direct", desc)
-	}
-	if args[0] != "git" || args[1] != "-c" {
-		t.Fatalf("attempt 0 argv = %v, want -c overrides right after git", args)
-	}
-	fetchIdx := -1
-	for i, a := range args {
-		if a == "fetch" {
-			fetchIdx = i
-			break
+	// Attempts 0..Attempts-2 on HTTPS remotes: explicit proxy override (come BEFORE subcommand).
+	for i := range Attempts - 1 {
+		args, env, desc := f.attemptArgs("https://github.com/x/y", i, base)
+		if desc != "proxy "+DefaultProxy {
+			t.Fatalf("attempt %d desc = %q, want proxy %s", i, desc, DefaultProxy)
+		}
+		if args[0] != "git" || args[1] != "-c" {
+			t.Fatalf("attempt %d argv = %v, want -c overrides right after git", i, args)
+		}
+		fetchIdx := -1
+		for j, a := range args {
+			if a == "fetch" {
+				fetchIdx = j
+				break
+			}
+		}
+		if fetchIdx < 4 || fetchIdx != len(args)-3 {
+			t.Fatalf("attempt %d argv = %v, want fetch subcommand last", i, args)
+		}
+		if !containsPair(args, "http.proxy="+DefaultProxy) || !containsPair(args, "https.proxy="+DefaultProxy) {
+			t.Fatalf("attempt %d argv = %v, want explicit proxy -c", i, args)
+		}
+		if proxyVarPresent(env) {
+			t.Fatalf("attempt %d env still has proxy vars: %v", i, env)
 		}
 	}
-	if fetchIdx < 4 || fetchIdx != len(args)-3 {
-		t.Fatalf("attempt 0 argv = %v, want fetch subcommand last", args)
+
+	// Final attempt on HTTPS remotes: direct fallback — empty -c overrides and scrubbed env.
+	args, env, desc := f.attemptArgs("https://github.com/x/y", Attempts-1, base)
+	if desc != "direct" {
+		t.Fatalf("final attempt desc = %q, want direct", desc)
 	}
 	if !containsPair(args, "http.proxy=") || !containsPair(args, "https.proxy=") {
-		t.Fatalf("attempt 0 argv = %v, want empty proxy overrides", args)
+		t.Fatalf("final attempt argv = %v, want empty proxy overrides", args)
 	}
 	if proxyVarPresent(env) {
-		t.Fatalf("attempt 0 env still has proxy vars: %v", env)
+		t.Fatalf("final attempt env still has proxy vars: %v", env)
 	}
 
-	// Attempts 1-4 on HTTPS remotes: explicit proxy override.
-	args, _, desc = f.attemptArgs("https://github.com/x/y", 1, base)
-	if desc != "proxy "+DefaultProxy {
-		t.Fatalf("attempt 1 desc = %q, want proxy %s", desc, DefaultProxy)
-	}
-	if !containsPair(args, "http.proxy="+DefaultProxy) || !containsPair(args, "https.proxy="+DefaultProxy) {
-		t.Fatalf("attempt 1 argv = %v, want explicit proxy -c", args)
+	if got := f.DescribeRemote("https://github.com/x/y"); got != "https: 4 via "+DefaultProxy+" + 1 direct" {
+		t.Fatalf("DescribeRemote = %q", got)
 	}
 
 	// SSH remotes: never proxied, all attempts direct.
