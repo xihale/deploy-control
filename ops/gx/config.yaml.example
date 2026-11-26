@@ -124,6 +124,13 @@ sites:
     script: /var/lib/deployd/scripts/run-site
     webhook_secret: <secret>
     run_as: class-relay-ci
+  - name: gdut-collections
+    repo: https://github.com/xihale/gdut-collections
+    branch: main
+    url: https://gdutcol.xeed.ink
+    script: /var/lib/deployd/scripts/run-site
+    webhook_secret: <secret>
+    run_as: gdutcol-ci
   # deploy-control itself (self-bootstrap); no run_as: runs as the service
   # user (root) because it installs the binary and restarts the service.
   - name: deploy-control

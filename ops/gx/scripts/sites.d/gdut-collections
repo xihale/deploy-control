@@ -1,0 +1,16 @@
+# gdut-collections — gdutcol.xeed.ink. Runs as gdutcol-ci, cwd = checked-out worktree
+# (DEPLOY_COMMIT). Next.js static export → out/; /_next holds immutable hashed chunks
+# retired via attic policy.
+site=gdut-collections
+dest=/srv/gdut-collections
+out=out
+attic_trees=(_next)
+
+prepare() {
+	COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm install --frozen-lockfile
+}
+
+build() {
+	COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm build
+	[ -f out/index.html ] || die "out/index.html missing after build"
+}
