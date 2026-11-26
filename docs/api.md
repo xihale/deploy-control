@@ -74,4 +74,4 @@
 - `X-GitHub-Event`：按站点 `events` 过滤（未配置时默认仅 `["push"]`）；未启用的事件及 `ping` 返回 `200` 并忽略。
 - `X-GitHub-Delivery`：按 `delivery_id` 去重，重复投递返回 `200` 且不重复入队。
 - `push` 事件：默认仅目标分支（`refs/heads/<branch>`）的普通推送会入队并返回 `202`；若站点配置了 `ref_regex`，则按该正则匹配完整 `ref`（如稳定版标签 `^refs/tags/web-v[0-9]+\.[0-9]+\.[0-9]+$`）。删除分支/标签等无效提交直接返回 `200` 忽略。
-- `release` 事件：需站点在 `events` 中启用 `release`；仅处理非草稿的 `published` / `released` / `prereleased` / `edited` / `deleted`（若配置了 `ref_regex` 还会校验 `refs/tags/<tag_name>`），在默认分支上创建 `trigger_type="release"` 任务并返回 `202`。
+- `release` 事件：需站点在 `events` 中启用 `release`；仅处理非草稿的 `published` / `edited` / `deleted`（若配置了 `ref_regex` 还会校验 `refs/tags/<tag_name>`），在默认分支上创建 `trigger_type="release"` 任务并返回 `202`。

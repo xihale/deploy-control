@@ -188,7 +188,7 @@ func matchPushTarget(site config.Site, payload pushPayload) (branch, sha string,
 
 func matchReleaseTarget(site config.Site, payload releasePayload) (branch string, ok bool, reason string) {
 	switch payload.Action {
-	case "published", "released", "prereleased", "edited", "deleted":
+	case "published", "edited", "deleted":
 	default:
 		return "", false, fmt.Sprintf("release action %q ignored", payload.Action)
 	}

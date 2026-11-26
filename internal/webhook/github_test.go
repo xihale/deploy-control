@@ -151,17 +151,19 @@ func TestWebhookReleaseEventHandling(t *testing.T) {
 		t.Fatalf("push-only release = %d %s, want 200 queued=false", rec.Code, rec.Body.String())
 	}
 
-	// Draft or created release actions are ignored.
-	createdBody, _ := json.Marshal(map[string]any{
-		"action": "created",
-		"release": map[string]any{
-			"tag_name": "v0.0.1-beta.9",
-			"draft":    false,
-		},
-	})
-	rec = postWebhook(t, h, "goke", secret, "release", "rel-2", createdBody)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"queued":false`) {
-		t.Fatalf("created release = %d %s, want 200 queued=false", rec.Code, rec.Body.String())
+	// Redundant prereleased/released and draft/created release actions are ignored.
+	for _, action := range []string{"created", "prereleased", "released"} {
+		body, _ := json.Marshal(map[string]any{
+			"action": action,
+			"release": map[string]any{
+				"tag_name": "v0.0.1-beta.9",
+				"draft":    false,
+			},
+		})
+		rec = postWebhook(t, h, "goke", secret, "release", "rel-ign-"+action, body)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"queued":false`) {
+			t.Fatalf("%s release = %d %s, want 200 queued=false", action, rec.Code, rec.Body.String())
+		}
 	}
 
 	draftPublished, _ := json.Marshal(map[string]any{
